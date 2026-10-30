@@ -17,6 +17,9 @@ import (
 	"windlock/tools"
 )
 
+// version is set at build time by scripts/build.sh.
+var version = "dev"
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
@@ -88,6 +91,10 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		usage(out)
+		return 0
+	}
+	if args[0] == "--version" {
+		fmt.Fprintf(out, "windlock %s\n", version)
 		return 0
 	}
 	cmd, ok := commands[args[0]]
@@ -375,6 +382,7 @@ Manage:
 Options:
   -v, --verbose  show tool output as it runs (default: logs/ in the root)
   -h, --help     show this help
+  --version      show the version
 
 Environment:
   %-15[3]s toolchain root (default ~/.local/share/windlock)

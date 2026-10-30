@@ -171,6 +171,16 @@ func TestCLIVerboseFlag(t *testing.T) {
 	}
 }
 
+func TestCLIVersion(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--version"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if got, want := stdout.String(), "windlock "+version+"\n"; got != want {
+		t.Fatalf("printed %q, want %q", got, want)
+	}
+}
+
 func TestCLIHelp(t *testing.T) {
 	for _, arg := range []string{"-h", "--help", "help"} {
 		var stdout, stderr bytes.Buffer
