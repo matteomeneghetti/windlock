@@ -3,14 +3,17 @@
 package container
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -25,6 +28,10 @@ const (
 	RootPath = "/windlock/root"
 	// binaryPath is where the Linux windlock is mounted in the container.
 	binaryPath = "/usr/local/bin/windlock"
+	// minCPUs and minMemory are the VM size below which windlock warns. The
+	// memory is under 8 GiB because a VM set to 8 GB reports a little less.
+	minCPUs   = 4
+	minMemory = 7 << 30
 )
 
 // Inside reports whether this process runs in the container.
@@ -53,6 +60,94 @@ func FindEngine() (Engine, error) {
 	}
 	return Engine{}, fmt.Errorf("windlock builds in a container and needs docker, podman or nerdctl on PATH (e.g. colima, OrbStack or Docker Desktop)")
 }
+
+// Info is what the engine reports about the machine containers run on.
+type Info struct {
+	CPUs   int
+	Memory int64 // bytes
+}
+
+// engineInfo runs the engine's info command, which fails when the engine's
+// daemon or VM is down. The timeout covers a VM that hangs instead of failing.
+func engineInfo(e Engine) (string, error) {
+	format := "{{.NCPU}} {{.MemTotal}}"
+	if e.Podman {
+		format = "{{.Host.CPUs}} {{.Host.MemTotal}}"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, e.Path, "info", "--format", format).Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && len(exit.Stderr) > 0 {
+		return "", errors.New(strings.TrimSpace(string(exit.Stderr)))
+	}
+	return string(out), err
+}
+
+// GetInfo returns the engine's CPUs and memory.
+func GetInfo(e Engine) (Info, error) {
+	text, err := engineInfo(e)
+	if err != nil {
+		return Info{}, err
+	}
+	var info Info
+	if _, err := fmt.Sscan(text, &info.CPUs, &info.Memory); err != nil {
+		return Info{}, fmt.Errorf("unexpected %s info output %q", filepath.Base(e.Path), strings.TrimSpace(text))
+	}
+	return info, nil
+}
+
+// CheckRunning returns an error saying how to start the engine if it is down.
+func CheckRunning(e Engine) error {
+	if _, err := engineInfo(e); err != nil {
+		return fmt.Errorf("%s isn't responding, so the container engine may not be running. Start it (Colima: colima start) and try again: %v", filepath.Base(e.Path), err)
+	}
+	return nil
+}
+
+// SizeWarning says how to enlarge a VM too small for a toolchain install and
+// firmware builds; it is empty for one that is large enough.
+func (i Info) SizeWarning() string {
+	if i.CPUs >= minCPUs && i.Memory >= minMemory {
+		return ""
+	}
+	return fmt.Sprintf("the container engine has %d CPUs and %.1f GiB of memory, and installs and builds may fail or be slow; 4 CPUs and 8 GB are recommended (Colima: colima stop && colima start --cpu 4 --memory 8)",
+		i.CPUs, float64(i.Memory)/(1<<30))
+}
+
+// ImageExists reports whether the engine already holds image.
+func ImageExists(e Engine, image string) bool {
+	return exec.Command(e.Path, "image", "inspect", image).Run() == nil
+}
+
+// VolumeExists reports whether the engine already holds volume.
+func VolumeExists(e Engine, volume string) bool {
+	return exec.Command(e.Path, "volume", "inspect", volume).Run() == nil
+}
+
+// ProjectMount is where Inspect mounts the project.
+const ProjectMount = "/windlock-project"
+
+// Inspect runs a shell script in a throwaway container, with the volume and
+// the project mounted read-only, and returns what it prints.
+func Inspect(e Engine, image, platform, volume, project, script string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	args := []string{"run", "--rm"}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+	args = append(args, "-v", volume+":"+RootPath+":ro", "-v", project+":"+ProjectMount+":ro",
+		"--entrypoint", "/bin/sh", image, "-c", script)
+	out, err := exec.CommandContext(ctx, e.Path, args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+// NotSharedFix says how to share dir with the engine's VM.
+func NotSharedFix(dir string) string { return notShared(dir).Error() }
 
 // Triple is the Linux host triple the container runs as. It matches the
 // host's CPU, because an emulated container is several times slower.

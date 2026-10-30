@@ -170,3 +170,62 @@ func TestEnsureVolumeCreatesOnce(t *testing.T) {
 		t.Fatalf("calls %q", calls)
 	}
 }
+
+func fakeEngine(t *testing.T, script string) Engine {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "engine")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return Engine{Path: path}
+}
+
+func TestGetInfo(t *testing.T) {
+	info, err := GetInfo(fakeEngine(t, `echo 4 8308363264`))
+	if err != nil || info != (Info{CPUs: 4, Memory: 8308363264}) {
+		t.Fatalf("info %+v err %v", info, err)
+	}
+	if _, err := GetInfo(fakeEngine(t, `echo surprise`)); err == nil || !strings.Contains(err.Error(), "unexpected") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestEngineInfoFormatByEngine(t *testing.T) {
+	e := fakeEngine(t, `echo "$3"`)
+	if out, err := engineInfo(e); err != nil || !strings.Contains(out, ".NCPU") {
+		t.Fatalf("docker format %q err %v", out, err)
+	}
+	e.Podman = true
+	if out, err := engineInfo(e); err != nil || !strings.Contains(out, ".Host.CPUs") {
+		t.Fatalf("podman format %q err %v", out, err)
+	}
+}
+
+func TestCheckRunning(t *testing.T) {
+	if err := CheckRunning(fakeEngine(t, `echo 4 8308363264`)); err != nil {
+		t.Fatal(err)
+	}
+	err := CheckRunning(fakeEngine(t, `echo cannot connect >&2; exit 1`))
+	if err == nil || !strings.Contains(err.Error(), "colima start") || !strings.Contains(err.Error(), "cannot connect") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestSizeWarning(t *testing.T) {
+	for _, tc := range []struct {
+		info Info
+		warn bool
+	}{
+		{Info{CPUs: 4, Memory: 8308363264}, false}, // what Colima reports for 8 GB
+		{Info{CPUs: 8, Memory: 16 << 30}, false},
+		{Info{CPUs: 2, Memory: 8 << 30}, true},
+		{Info{CPUs: 4, Memory: 2 << 30}, true},
+	} {
+		if got := tc.info.SizeWarning(); (got != "") != tc.warn {
+			t.Fatalf("%+v: warning %q", tc.info, got)
+		}
+	}
+	if got := (Info{CPUs: 2, Memory: 2 << 30}).SizeWarning(); !strings.Contains(got, "2 CPUs and 2.0 GiB") {
+		t.Fatalf("warning %q", got)
+	}
+}

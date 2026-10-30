@@ -72,7 +72,7 @@ func TestArgsUserOptions(t *testing.T) {
 	if err != nil || runner != "dfu-util" {
 		t.Fatalf("runner %s err %v", runner, err)
 	}
-	want := []string{"flash", "-d", build, "-r", "dfu-util", "--rebuild", "-f", filepath.Join(project, "out.bin"), "--", "-x"}
+	want := []string{"flash", "-d", build, "-r", "dfu-util", "--rebuild", "-f", filepath.Join(project, "out.bin"), "--domain", "app", "--", "-x"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args\n got %q\nwant %q", args, want)
 	}
@@ -176,12 +176,12 @@ func TestGDBArgs(t *testing.T) {
 	if err != nil || gdb != "/windlock/root/sdk/gdb" {
 		t.Fatalf("gdb %s err %v", gdb, err)
 	}
-	want := []string{"-ex", "target extended-remote host.docker.internal:3333", "-ex", "monitor reset halt", "-ex", "load", filepath.Join(domain, "zephyr", "zephyr.elf")}
+	want := []string{"-ex", "set remotetimeout 10", "-ex", "target extended-remote host.docker.internal:3333", "-ex", "monitor reset halt", "-ex", "load", filepath.Join(domain, "zephyr", "zephyr.elf")}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args %q", args)
 	}
 	_, args, _ = GDBArgs(domain, "jlink", "host.docker.internal:2331", false)
-	if want := []string{"-ex", "target remote host.docker.internal:2331", filepath.Join(domain, "zephyr", "zephyr.elf")}; !reflect.DeepEqual(args, want) {
+	if want := []string{"-ex", "set remotetimeout 10", "-ex", "target remote host.docker.internal:2331", filepath.Join(domain, "zephyr", "zephyr.elf")}; !reflect.DeepEqual(args, want) {
 		t.Fatalf("attach args %q", args)
 	}
 	if _, _, err := GDBArgs(domain, "dfu-util", "x:1", true); err == nil {
@@ -189,5 +189,32 @@ func TestGDBArgs(t *testing.T) {
 	}
 	if dir, err := DomainDir(t.TempDir()); err != nil || dir == "" {
 		t.Fatalf("a build without sysbuild: %s %v", dir, err)
+	}
+}
+
+func TestDFUSendsOnlyTheDefaultDomain(t *testing.T) {
+	project, build := sysbuildProject(t)
+	args, _, err := Args(Request{Project: project, DefaultBuild: build, Args: []string{"flash", "-r", "dfu-util"}}, tools())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--domain app") {
+		t.Fatalf("args %q", args)
+	}
+	// The user's own choice stands.
+	args, _, _ = Args(Request{Project: project, DefaultBuild: build, Args: []string{"flash", "-r", "dfu-util", "--domain=mcuboot"}}, tools())
+	if joined := strings.Join(args, " "); strings.Contains(joined, "--domain app") || !strings.Contains(joined, "--domain=mcuboot") {
+		t.Fatalf("args %q", args)
+	}
+	// Other runners flash every domain, each at its own address.
+	args, _, _ = Args(Request{Project: project, DefaultBuild: build, Args: []string{"flash", "-r", "openocd"}}, tools())
+	if strings.Contains(strings.Join(args, " "), "--domain") {
+		t.Fatalf("args %q", args)
+	}
+	// Without sysbuild there are no domains to choose from.
+	plain := filepath.Join(project, "build", "plain")
+	args, _, err = Args(Request{Project: project, DefaultBuild: plain, Args: []string{"flash", "-r", "dfu-util"}}, tools())
+	if err != nil || strings.Contains(strings.Join(args, " "), "--domain") {
+		t.Fatalf("args %q err %v", args, err)
 	}
 }

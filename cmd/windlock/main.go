@@ -72,6 +72,7 @@ var commands = map[string]func(args []string, s streams) error{
 	"flash":  cmdProbe("flash"),
 	"debug":  cmdProbe("debug"),
 	"attach": cmdProbe("attach"),
+	"doctor": cmdDoctor,
 	// gdb-remote runs in the container for windlock west debug; not in usage.
 	"gdb-remote": cmdGDBRemote,
 }
@@ -370,6 +371,7 @@ Build and run:
                  attach gdb to the running target
   west <args>    run any other west command
   shell [args]   open a shell in the build environment
+  doctor         check this machine and project, and say how to fix problems
 
 Manage:
   target add <name> --board <board> --source <dir> [--default]

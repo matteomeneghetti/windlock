@@ -30,9 +30,9 @@ There are no packages yet, so build from source. From a checkout of this reposit
 scripts/build.sh
 ```
 
-Then put `bin/windlock` on your `PATH`.
+Then put `bin/windlock` on your `PATH`, and run `windlock doctor` to check your setup.
 
-windlock is at an early stage. Builds have been tested on Apple Silicon Macs, but flashing and debugging haven't been run on a real board yet. It supports Arm, RISC-V, x86 and arm64 boards, but not yet Xtensa (most ESP32 chips), `native_sim`, private repositories, or manifests that import Zephyr through another project, such as the nRF Connect SDK.
+windlock is at an early stage. It has been tested on Apple Silicon Macs, building for and flashing an STM32H7 board with OpenOCD and a J-Link. Debugging and USB DFU haven't been run on a real board yet. It supports Arm, RISC-V, x86 and arm64 boards, but not yet Xtensa (most ESP32 chips), `native_sim`, private repositories, or manifests that import Zephyr through another project, such as the nRF Connect SDK.
 
 ## Usage
 

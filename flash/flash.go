@@ -152,6 +152,17 @@ func Args(r Request, t Tools) ([]string, string, error) {
 	if err := checkVendor(runner, sub, t); err != nil {
 		return nil, "", err
 	}
+	// west flash goes through every sysbuild domain, and dfu-util would send
+	// each one to the same update slot: MCUboot's binary as well as the app's.
+	if sub == "flash" && runner == "dfu-util" && !namesDomain(opts) {
+		d, err := readDomains(buildDir)
+		if err != nil {
+			return nil, "", err
+		}
+		if d.Default != "" {
+			opts = append(opts, "--domain", d.Default)
+		}
+	}
 	if runner == "openocd" {
 		opts = append(opts, "--openocd", filepath.Join(t.Bin, "openocd"), "--openocd-search", t.OpenOCDScripts)
 	}
@@ -160,6 +171,25 @@ func Args(r Request, t Tools) ([]string, string, error) {
 		args = append(append(args, "--"), rest...)
 	}
 	return args, runner, nil
+}
+
+func namesDomain(opts []string) bool {
+	for _, o := range opts {
+		if o == "--domain" || strings.HasPrefix(o, "--domain=") {
+			return true
+		}
+	}
+	return false
+}
+
+// VendorProblem says what the build's default flash runner is missing, if it
+// is a vendor tool. A build that does not exist yet has no default runner.
+func VendorProblem(buildDir string, t Tools) (runner string, err error) {
+	runner, err = defaultRunner(buildDir, "flash")
+	if err != nil {
+		return "", nil
+	}
+	return runner, checkVendor(runner, "flash", t)
 }
 
 func checkVendor(runner, sub string, t Tools) error {

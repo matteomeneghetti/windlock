@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -144,32 +143,33 @@ func runHostDebug(project string, args []string, s streams) error {
 	if err != nil {
 		return err
 	}
+	debug, ok := flash.DebugRunners[runner]
+	if !ok {
+		return fmt.Errorf("runner %s has no debug server windlock can reach from the container; use -r openocd, -r jlink or -r pyocd", runner)
+	}
 	port := flash.OptionValue(opts, "--gdb-port", "--gdb-port")
 	if port == "" {
-		port = flash.DebugRunners[runner]
+		port = debug.Port
 	}
-	if port == "" {
-		return fmt.Errorf("runner %s has no debug server windlock can reach from the container; use -r openocd, -r jlink or -r pyocd", runner)
+	// The runner's debugserver resets the target unless told otherwise.
+	if sub == "attach" && runner == "openocd" {
+		westArgs = append(westArgs[:1:1], append([]string{"--cmd-reset-halt", "halt"}, westArgs[1:]...)...)
 	}
 	domain, err := flash.DomainDir(flash.BuildDir(westArgs[1:], project, h.defaultBuild))
 	if err != nil {
 		return err
 	}
-	server, err := flash.Command(h.ws, h.root, h.tools, append(global, westArgs...))
+	cmd, err := flash.Command(h.ws, h.root, h.tools, append(global, westArgs...))
 	if err != nil {
 		return err
 	}
-	server.Stdout, server.Stderr = s.errOut, s.errOut
-	if err := server.Start(); err != nil {
+	server, err := startDebugServer(cmd, debug.Ready, s.verbose, s.errOut)
+	if err != nil {
 		return err
 	}
-	exited := make(chan error, 1)
-	go func() { exited <- server.Wait() }()
-	defer func() {
-		_ = server.Process.Kill()
-		<-exited
-	}()
-	if err := waitPort("127.0.0.1:"+port, exited, 30*time.Second); err != nil {
+	defer server.stop()
+	defer server.stopOnSignal()()
+	if err := server.waitReady(30 * time.Second); err != nil {
 		return err
 	}
 	inner := []string{"gdb-remote", "--runner", runner, "--remote", "host.docker.internal:" + port, "--build-dir", domain}
@@ -177,26 +177,6 @@ func runHostDebug(project string, args []string, s streams) error {
 		inner = append(inner, "--load")
 	}
 	return runInContainer(project, inner, false, s)
-}
-
-// waitPort waits until addr accepts connections, failing early if the
-// server exits first.
-func waitPort(addr string, exited chan error, limit time.Duration) error {
-	deadline := time.Now().Add(limit)
-	for time.Now().Before(deadline) {
-		select {
-		case err := <-exited:
-			exited <- err // the deferred cleanup still waits on it
-			return fmt.Errorf("the debug server exited before listening on %s: %v; see its output above", addr, err)
-		default:
-		}
-		if c, err := net.DialTimeout("tcp", addr, 200*time.Millisecond); err == nil {
-			c.Close()
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	return fmt.Errorf("the debug server did not listen on %s within %s; see its output above", addr, limit)
 }
 
 // splitWestGlobal splits west's own options from the subcommand and its

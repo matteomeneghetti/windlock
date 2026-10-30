@@ -192,3 +192,10 @@ func TestCLIHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestCLIDoctorRunsOnTheHost(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"doctor"}, nil, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "runs on the host") {
+		t.Fatalf("exit %d stderr %q", code, stderr.String())
+	}
+}

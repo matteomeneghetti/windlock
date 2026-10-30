@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -294,5 +295,73 @@ func TestFlashStopsBeforeTheProbe(t *testing.T) {
 	}
 	if _, err := os.Stat(westLog); err == nil {
 		t.Fatal("flashed after a failed build")
+	}
+}
+
+// setEngineScript replaces containerProject's fake engine with script.
+func setEngineScript(t *testing.T, script string) {
+	t.Helper()
+	if err := os.WriteFile(os.Getenv(container.EngineEnv), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStoppedEngineExplainsItself(t *testing.T) {
+	containerProject(t)
+	setEngineScript(t, `echo cannot connect >&2; exit 1`)
+	ensureVolume = func(container.Engine, string, string, string, int, int) error {
+		return errors.New("volume create failed")
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"build"}, nil, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "colima start") {
+		t.Fatalf("exit %d stderr %q", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "volume create failed") {
+		t.Fatalf("stderr %q", stderr.String())
+	}
+}
+
+func TestVolumeErrorKeptWhenEngineRuns(t *testing.T) {
+	containerProject(t)
+	ensureVolume = func(container.Engine, string, string, string, int, int) error {
+		return errors.New("volume create failed")
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"build"}, nil, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "volume create failed") {
+		t.Fatalf("exit %d stderr %q", code, stderr.String())
+	}
+}
+
+func TestSmallEngineWarnsOnInstallOnly(t *testing.T) {
+	containerProject(t)
+	setEngineScript(t, `echo 2 2147483648`)
+	for args, want := range map[string]bool{"sync": true, "-v sync": true, "init": true, "west boards": false} {
+		var stdout, stderr bytes.Buffer
+		if code := run(strings.Fields(args), nil, &stdout, &stderr); code != 0 {
+			t.Fatalf("%s: exit %d stderr %q", args, code, stderr.String())
+		}
+		if got := strings.Contains(stderr.String(), "warning: the container engine has 2 CPUs"); got != want {
+			t.Fatalf("%s: warned %v, stderr %q", args, got, stderr.String())
+		}
+	}
+}
+
+func TestDoctorExitCode(t *testing.T) {
+	containerProject(t)
+	setEngineScript(t, `echo cannot connect >&2; exit 1`)
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"doctor"}, nil, &stdout, &stderr); code != 1 {
+		t.Fatalf("engine down: exit %d stderr %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "fail  running") || !strings.Contains(stdout.String(), "colima start") {
+		t.Fatalf("stdout %q", stdout.String())
+	}
+	setEngineScript(t, `echo 4 8308363264`)
+	stdout.Reset()
+	if code := run([]string{"doctor"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("healthy: exit %d stdout %q", code, stdout.String())
+	}
+	if code := run([]string{"doctor", "extra"}, nil, &stdout, &stderr); code != 1 {
+		t.Fatalf("extra argument: exit %d", code)
 	}
 }

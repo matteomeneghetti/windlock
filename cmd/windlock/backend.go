@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -107,6 +108,7 @@ func runInContainer(project string, args []string, lock bool, s streams) error {
 		}
 		defer l.Release()
 	}
+	installs := args[0] == "init" || args[0] == "sync"
 	if s.verbose {
 		args = append([]string{"-v"}, args...)
 	}
@@ -128,7 +130,15 @@ func runInContainer(project string, args []string, lock bool, s streams) error {
 		spec.Env = append(spec.Env, "TERM="+term)
 	}
 	if err := ensureVolume(engine, spec.Image, spec.Platform, spec.Volume, spec.UID, spec.GID); err != nil {
+		if down := container.CheckRunning(engine); down != nil {
+			return down
+		}
 		return err
+	}
+	if installs {
+		if info, err := container.GetInfo(engine); err == nil && info.SizeWarning() != "" {
+			fmt.Fprintf(s.errOut, "windlock: warning: %s\n", info.SizeWarning())
+		}
 	}
 	cmd := container.Command(spec)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = s.in, s.out, s.errOut
