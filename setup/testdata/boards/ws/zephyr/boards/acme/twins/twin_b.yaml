@@ -1,0 +1,4 @@
+identifier: twin_b
+name: Twin B
+type: mcu
+arch: x86

@@ -1,0 +1,49 @@
+schema: 3
+west: fixture-west
+container:
+  image: fixture-image@sha256:fixture
+host_tools:
+  cmake: fixture-cmake
+  python: fixture-python
+zephyr:
+  - name: "4.4.2"
+    url: https://github.com/zephyrproject-rtos/zephyr
+    revision: v4.4.2
+    commit: 0123456789abcdef0123456789abcdef01234567
+    sdk: 1.0.1
+    toolchains:
+      - x86_64-zephyr-elf
+    manifest_sha256: fixture-freeze-4.4.2
+    projects:
+      - name: cmsis
+        path: modules/hal/cmsis
+        revision: fixture-cmsis
+    python_inputs_sha256: fixture-python-inputs-4.4.2
+    python_requirements:
+      - pyelftools==0.32
+      - west==1.5.0
+      - windows-curses==2.4.1 ; sys_platform == 'win32'
+  - name: 4.3.1
+    url: https://github.com/zephyrproject-rtos/zephyr
+    revision: v4.3.1
+    commit: fedcba9876543210fedcba9876543210fedcba98
+    sdk: 0.17.4
+    toolchains:
+      - x86_64-zephyr-elf
+    manifest_sha256: fixture-freeze-4.3.1
+    projects: []
+    python_inputs_sha256: fixture-python-inputs-4.3.1
+    python_requirements:
+      - west==1.5.0
+platforms:
+  linux-x86_64:
+    host_tools:
+      cmake: {url: fixture-cmake-linux, sha256: fixture-cmake-linux-sha256}
+      python: {url: fixture-python-linux, sha256: fixture-python-linux-sha256}
+    sdk:
+      1.0.1: {filename: zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz, url: fixture-url-1.0.1-linux-x86_64, sha256: fixture-sha-1.0.1-linux-x86_64}
+  macos-aarch64:
+    host_tools:
+      cmake: {url: fixture-cmake-mac, sha256: fixture-cmake-mac-sha256}
+    sdk:
+      0.17.4: {filename: zephyr-sdk-0.17.4_macos-aarch64_minimal.tar.xz, url: fixture-url-0.17.4-macos-aarch64, sha256: fixture-sha-0.17.4-macos-aarch64}

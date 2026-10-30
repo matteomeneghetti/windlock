@@ -1,0 +1,11 @@
+# project file
+zephyr:
+  - v4.4.2 # default
+target: app
+targets:
+  app:
+    board: acme_board
+    source: apps/app
+  sensor:
+    board: acme_sensor
+    source: apps/sensor

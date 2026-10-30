@@ -1,0 +1,5 @@
+board:
+  name: acme_board
+  vendor: acme
+  socs:
+  - name: stm32h747xi

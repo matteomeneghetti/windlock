@@ -1,0 +1,4 @@
+identifier: vboard
+name: Vendor board
+type: mcu
+arch: riscv

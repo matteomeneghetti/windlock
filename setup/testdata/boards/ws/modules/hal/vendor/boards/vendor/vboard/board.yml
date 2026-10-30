@@ -1,0 +1,5 @@
+board:
+  name: vboard
+  vendor: vendor
+  socs:
+  - name: vsoc

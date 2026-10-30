@@ -1,0 +1,7 @@
+# From Zephyr v4.4.2 boards/qemu/cortex_m3/board.yml
+board:
+  name: qemu_cortex_m3
+  full_name: QEMU Emulation for ARM Cortex-M3
+  vendor: qemu
+  socs:
+  - name: ti_lm3s6965

@@ -1,0 +1,6 @@
+# Build output
+/bin/
+/internal/linuxbin/bin/windlock-linux-*
+
+# macOS
+.DS_Store

@@ -1,0 +1,147 @@
+schema: 3
+west: 1.5.0
+container:
+  image: ghcr.io/zephyrproject-rtos/ci-base@sha256:0a4e08683a5582748696dd28d1633566be04218174811eb532e170a13e14959b
+host_tools:
+  cmake: 3.31.12
+  dfu-util: "0.11"
+  dtc: 1.8.1
+  gperf: "3.3"
+  ninja: 1.13.2
+  openocd: 0.12.0-7
+  python: 3.12.15
+  uv: 0.13.6
+zephyr:
+  - name: 4.4.2
+    url: https://github.com/zephyrproject-rtos/zephyr
+    revision: v4.4.2
+    commit: dccb09599635bdff17633fa7e9dab014b91dce90
+    sdk: 1.0.1
+    toolchains:
+      - arm-zephyr-eabi
+    manifest_sha256: abababababababababababababababababababababababababababababababab
+    projects:
+      - name: cmsis_6
+        path: modules/hal/cmsis_6
+        revision: cccccccccccccccccccccccccccccccccccccccc
+    python_inputs_sha256: cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+    python_requirements:
+      - pyelftools==0.32
+      - west==1.5.0
+      - windows-curses==2.4.1 ; sys_platform == 'win32'
+  - name: 4.3.1
+    url: https://github.com/zephyrproject-rtos/zephyr
+    revision: v4.3.1
+    commit: 75f67d766726351b30199f9a2bf55803d717a3be
+    sdk: 0.17.4
+    toolchains:
+      - arm-zephyr-eabi
+    manifest_sha256: abababababababababababababababababababababababababababababababab
+    projects:
+      - name: cmsis_6
+        path: modules/hal/cmsis_6
+        revision: cccccccccccccccccccccccccccccccccccccccc
+    python_inputs_sha256: cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+    python_requirements:
+      - pyelftools==0.32
+      - west==1.5.0
+      - windows-curses==2.4.1 ; sys_platform == 'win32'
+platforms:
+  linux-aarch64:
+    host_tools:
+      cmake:
+        url: https://github.com/Kitware/CMake/releases/download/v3.31.12/cmake-3.31.12-linux-aarch64.tar.gz
+        sha256: 83f8fd91d2038a56556e1400390fcfe42f79602940c494f6c6f1cdae7f9e7f40
+      dfu-util:
+        url: https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz
+        sha256: b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e
+      dtc:
+        url: https://www.kernel.org/pub/software/utils/dtc/dtc-1.8.1.tar.gz
+        sha256: 454e5cce748ce957c91e7f45e66da2cff5100ddb52155d7a909c43cbeaf1bcb0
+      gperf:
+        url: https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz
+        sha256: fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8
+      ninja:
+        url: https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux-aarch64.zip
+        sha256: fd2cacc8050a7f12a16a2e48f9e06fca5c14fc4c2bee2babb67b58be17a607fc
+      openocd:
+        url: https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-7/xpack-openocd-0.12.0-7-linux-arm64.tar.gz
+        sha256: db73a3ab91c556ecec2405a7e02d404b11139df6aba1031cad94a7e6766d06cc
+      python:
+        url: https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.12.15+20261021-aarch64-unknown-linux-gnu-install_only.tar.gz
+        sha256: f53cca8fcd20805bddaa8bff1ef722a6918f8225d37561bd36ad901d13d580af
+      uv:
+        url: https://github.com/astral-sh/uv/releases/download/0.13.6/uv-aarch64-unknown-linux-gnu.tar.gz
+        sha256: 229e194255c7958d86d56e8790d969a6f74736592133f0dfd0076f754c642c1d
+    sdk:
+      0.17.4:
+        filename: zephyr-sdk-0.17.4_linux-aarch64_minimal.tar.xz
+        url: https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-aarch64_minimal.tar.xz
+        sha256: "4444444444444444444444444444444444444444444444444444444444444444"
+      1.0.1:
+        filename: zephyr-sdk-1.0.1_linux-aarch64_minimal.tar.xz
+        url: https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/zephyr-sdk-1.0.1_linux-aarch64_minimal.tar.xz
+        sha256: d79c5bfc68e679488659bea289a4026e52a64f03338875c8c9c850fff13cee30
+  linux-x86_64:
+    host_tools:
+      cmake:
+        url: https://github.com/Kitware/CMake/releases/download/v3.31.12/cmake-3.31.12-linux-x86_64.tar.gz
+        sha256: 0dc2e9a6860f06bf10bd8fadc03e35d9eeb4df46e33763a7e480e987758f385c
+      dfu-util:
+        url: https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz
+        sha256: b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e
+      dtc:
+        url: https://www.kernel.org/pub/software/utils/dtc/dtc-1.8.1.tar.gz
+        sha256: 454e5cce748ce957c91e7f45e66da2cff5100ddb52155d7a909c43cbeaf1bcb0
+      gperf:
+        url: https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz
+        sha256: fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8
+      ninja:
+        url: https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux.zip
+        sha256: 5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6
+      openocd:
+        url: https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-7/xpack-openocd-0.12.0-7-linux-x64.tar.gz
+        sha256: 94b3790983beaf8ed57e646c0620dd66d705fddae03d290823a6ed3b439468d6
+      python:
+        url: https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.12.15+20261021-x86_64-unknown-linux-gnu-install_only.tar.gz
+        sha256: 5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124
+      uv:
+        url: https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-gnu.tar.gz
+        sha256: f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645
+    sdk:
+      0.17.4:
+        filename: zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
+        url: https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
+        sha256: "3333333333333333333333333333333333333333333333333333333333333333"
+      1.0.1:
+        filename: zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz
+        url: https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz
+        sha256: ca9bc0ff66fafca1dac9d592a36d953cf16d096a9d09b1c0357f021cf9f6a7eb
+  macos-aarch64:
+    host_tools:
+      dfu-util:
+        url: https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz
+        sha256: b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e
+      openocd:
+        url: https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-7/xpack-openocd-0.12.0-7-darwin-arm64.tar.gz
+        sha256: 667342c086984f3e5a55b4e0d5f711add13fb04de040fca493303000e6c19327
+      python:
+        url: https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.12.15+20261021-aarch64-apple-darwin-install_only.tar.gz
+        sha256: a18cc33862b53bd54a148c710def5375c1b47470cccedf817a19c2d211764584
+      uv:
+        url: https://github.com/astral-sh/uv/releases/download/0.13.6/uv-aarch64-apple-darwin.tar.gz
+        sha256: 60fbd5c8a1ed681845eea28d9d622fcde03c51e91a43465b64a1e17db1ed3472
+  macos-x86_64:
+    host_tools:
+      dfu-util:
+        url: https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz
+        sha256: b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e
+      openocd:
+        url: https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-7/xpack-openocd-0.12.0-7-darwin-x64.tar.gz
+        sha256: 668ad25350103a4357e11629ec833eae5982e973889ce25bad0c2963e37fa8bf
+      python:
+        url: https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.12.15+20261021-x86_64-apple-darwin-install_only.tar.gz
+        sha256: 869e0b30959beccc616ce14907439f4d0b3170c5830a2362dade07f07b0ed3b8
+      uv:
+        url: https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-apple-darwin.tar.gz
+        sha256: 63ba17fdda55ad1a230d4b37fc6017ffa10c23688c83818bd3bfdf914c652a02

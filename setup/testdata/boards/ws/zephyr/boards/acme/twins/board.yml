@@ -1,0 +1,9 @@
+boards:
+- name: twin_a
+  vendor: acme
+  socs:
+  - name: soc_a
+- name: twin_b
+  vendor: acme
+  socs:
+  - name: soc_b

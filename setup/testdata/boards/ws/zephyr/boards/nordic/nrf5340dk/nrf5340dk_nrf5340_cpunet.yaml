@@ -1,0 +1,8 @@
+# Trimmed from Zephyr v4.4.2
+identifier: nrf5340dk/nrf5340/cpunet
+name: NRF5340-DK
+type: mcu
+arch: arm
+toolchain:
+  - gnuarmemb
+  - zephyr
