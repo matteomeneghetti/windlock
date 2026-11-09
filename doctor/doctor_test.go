@@ -46,7 +46,7 @@ func writeProject(t *testing.T, cfg Config, image string) {
 	if err := os.WriteFile(filepath.Join(cfg.Project, lockfile.ConfigFilename), []byte(conf), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lock := "schema: 3\nwest: 1.5.0\ncontainer:\n  image: " + image + "\nzephyr:\n  - name: \"4.4.1\"\n    commit: abc\n    sdk: 1.0.1\n"
+	lock := "schema: 1\nwest: 1.5.0\ncontainer:\n  image: " + image + "\nzephyr:\n  - name: \"4.4.1\"\n    commit: abc\n    sdk: 1.0.1\n"
 	if err := os.WriteFile(filepath.Join(cfg.Project, lockfile.Filename), []byte(lock), 0o644); err != nil {
 		t.Fatal(err)
 	}

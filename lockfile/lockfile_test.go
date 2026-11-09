@@ -56,19 +56,26 @@ func TestReadRejectsEmptyAndUnknownFields(t *testing.T) {
 	if _, err := Read(strings.NewReader("")); err == nil {
 		t.Fatal("empty file was accepted")
 	}
-	if _, err := Read(strings.NewReader("schema: 3\nbogus: 1\n")); err == nil || !strings.Contains(err.Error(), "bogus") {
+	if _, err := Read(strings.NewReader("schema: 1\nbogus: 1\n")); err == nil || !strings.Contains(err.Error(), "bogus") {
 		t.Fatalf("unknown field err %v", err)
 	}
 }
 
 func TestReadFileNamesOtherSchema(t *testing.T) {
-	path := filepath.Join(t.TempDir(), Filename)
-	if err := os.WriteFile(path, []byte("schema: 2\ndefault: \"4.4.2\"\nzephyr: []\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, err := ReadFile(path)
-	if err == nil || !strings.Contains(err.Error(), "schema 2") || !strings.Contains(err.Error(), "windlock init") {
-		t.Fatalf("schema 2 err %v", err)
+	for _, tc := range []struct {
+		schema, want string
+	}{
+		{"2", "upgrade windlock"},
+		{"3", "pre-release windlock; rerun windlock init"},
+		{"-1", "rerun windlock init"},
+	} {
+		path := filepath.Join(t.TempDir(), Filename)
+		if err := os.WriteFile(path, []byte("schema: "+tc.schema+"\ndefault: \"4.4.2\"\nzephyr: []\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadFile(path); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("schema %s err %v, want %q", tc.schema, err, tc.want)
+		}
 	}
 }
 
@@ -77,9 +84,37 @@ func TestCheckSchema(t *testing.T) {
 	if err := lock.CheckSchema(); err != nil {
 		t.Fatal(err)
 	}
-	lock.Schema = 2
+	lock.Schema = Schema + 1
+	if err := lock.CheckSchema(); err == nil || !strings.Contains(err.Error(), "upgrade windlock") {
+		t.Fatalf("newer schema err %v", err)
+	}
+	lock.Schema = MinSchema - 1
 	if err := lock.CheckSchema(); err == nil || !strings.Contains(err.Error(), "windlock init") {
+		t.Fatalf("older schema err %v", err)
+	}
+}
+
+func TestWrittenFilesNameTheirSchema(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Write(&buf, expectedFixture()); err != nil {
+		t.Fatal(err)
+	}
+	want := "# yaml-language-server: $schema=" + SchemaURL + "\nschema: 1\nwest: "
+	if !strings.HasPrefix(buf.String(), want) {
+		t.Fatalf("lockfile starts\n%s", buf.String()[:min(len(buf.String()), 200)])
+	}
+}
+
+func TestConfigSchema(t *testing.T) {
+	cfg, err := ReadConfig(strings.NewReader("zephyr:\n  - v4.4.2\n"))
+	if err != nil || cfg.Schema != 1 {
+		t.Fatalf("unversioned config %+v err %v", cfg, err)
+	}
+	if _, err := ReadConfig(strings.NewReader("schema: 2\n")); err == nil || !strings.Contains(err.Error(), "upgrade windlock") {
 		t.Fatalf("schema 2 err %v", err)
+	}
+	if _, err := ReadConfig(strings.NewReader("schema: 1\nbogus: 1\n")); err == nil || !strings.Contains(err.Error(), "bogus") {
+		t.Fatalf("unknown field err %v", err)
 	}
 }
 
@@ -268,7 +303,7 @@ func TestWriteConfigFileRoundTrip(t *testing.T) {
 		t.Fatalf("round trip %+v err %v", back, err)
 	}
 	text, _ := os.ReadFile(path)
-	if !strings.HasPrefix(string(text), "# Managed by windlock") {
+	if !strings.HasPrefix(string(text), "# yaml-language-server: $schema="+ConfigSchemaURL+"\n# Managed by windlock") || !strings.Contains(string(text), "\nschema: 1\nzephyr:") {
 		t.Fatalf("header:\n%s", text)
 	}
 }
@@ -283,7 +318,7 @@ func expectedFixture() Lockfile {
 		}
 	}
 	return Lockfile{
-		Schema:    3,
+		Schema:    1,
 		West:      "fixture-west",
 		Container: Container{Image: "fixture-image@sha256:fixture"},
 		HostTools: map[string]string{"cmake": "fixture-cmake", "python": "fixture-python"},

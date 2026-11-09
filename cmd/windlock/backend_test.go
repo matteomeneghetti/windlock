@@ -156,7 +156,7 @@ func hostFlashProject(t *testing.T) (project, westLog string) {
 	if err := lockfile.WriteFile(lockfile.Filename, lock); err != nil {
 		t.Fatal(err)
 	}
-	cfg := lockfile.Config{Zephyr: []string{"v4.4.2"}, Target: "app", Targets: map[string]lockfile.Target{"app": {Name: "app", Board: "acme_board", Source: "apps/app"}}}
+	cfg := lockfile.Config{Zephyr: []string{"v4.4.2"}, Target: "app", Targets: map[string]lockfile.Target{"app": {Board: "acme_board", Source: "apps/app"}}}
 	if err := lockfile.WriteConfigFile(lockfile.ConfigFilename, cfg); err != nil {
 		t.Fatal(err)
 	}

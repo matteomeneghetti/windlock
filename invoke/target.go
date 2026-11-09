@@ -89,7 +89,7 @@ func buildCommand(cfg lockfile.Config, lock lockfile.Lockfile, root, triple, app
 	return cmd, nil
 }
 
-func westArgs(target lockfile.Target, westOpts, cmakeArgs []string) []string {
+func westArgs(target lockfile.NamedTarget, westOpts, cmakeArgs []string) []string {
 	args := []string{"build", "-b", target.Board, "-d", path.Join("build", target.Name)}
 	// --sysbuild and --no-sysbuild are one west option, so a choice in the
 	// forwarded options wins over the target's.
@@ -138,7 +138,7 @@ func rejectOwned(target string, opts []string) error {
 	return nil
 }
 
-func requireSource(appDir string, target lockfile.Target) error {
+func requireSource(appDir string, target lockfile.NamedTarget) error {
 	dir := target.Source
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(appDir, dir)

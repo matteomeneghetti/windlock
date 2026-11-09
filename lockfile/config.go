@@ -12,48 +12,55 @@ import (
 // commands write it.
 const ConfigFilename = "windlock.yml"
 
-// Config is windlock.yml: the Zephyr revisions to install and the build
-// targets. Only windlock writes it.
-type Config struct {
-	// Zephyr lists upstream revisions, the first being the default; empty
-	// in a west.yml project, whose manifest names the revision.
-	Zephyr []string `yaml:"zephyr,omitempty"`
-	// Target names the target build uses when the command omits one.
-	Target  string            `yaml:"target,omitempty"`
-	Targets map[string]Target `yaml:"targets,omitempty"`
+// ConfigSchema is the windlock.yml format version this windlock writes, and
+// MinConfigSchema the oldest it reads. schema/config-v<N>.json defines each
+// version; a file without a schema field is schema 1.
+const (
+	ConfigSchema    = 1
+	MinConfigSchema = 1
+)
+
+// ConfigSchemaURL is the $id of the current config schema.
+const ConfigSchemaURL = "https://raw.githubusercontent.com/matteomeneghetti/windlock/main/schema/config-v1.json"
+
+// CheckSchema fails for a windlock.yml this windlock cannot read.
+func (c Config) CheckSchema() error {
+	switch {
+	case c.Schema >= MinConfigSchema && c.Schema <= ConfigSchema:
+		return nil
+	case c.Schema > ConfigSchema:
+		return fmt.Errorf("%s is schema %d; this windlock reads up to schema %d; upgrade windlock", ConfigFilename, c.Schema, ConfigSchema)
+	default:
+		return fmt.Errorf("%s is schema %d; this windlock reads schema %d to %d", ConfigFilename, c.Schema, MinConfigSchema, ConfigSchema)
+	}
 }
 
-// Target is one build. Name is the key in targets.
-type Target struct {
-	Name   string `yaml:"-"`
-	Board  string `yaml:"board"`
-	Source string `yaml:"source"`
-	// Sysbuild builds the target with west build --sysbuild, which also
-	// builds and signs companion images such as MCUboot.
-	Sysbuild bool `yaml:"sysbuild,omitempty"`
+// NamedTarget is a target with its key in targets, which names build/<name>.
+type NamedTarget struct {
+	Name string
+	Target
 }
 
 // TargetNamed returns the named build target. An empty name uses the target
 // field.
-func (c Config) TargetNamed(name string) (Target, error) {
+func (c Config) TargetNamed(name string) (NamedTarget, error) {
 	if len(c.Targets) == 0 {
-		return Target{}, fmt.Errorf("%s has no targets", ConfigFilename)
+		return NamedTarget{}, fmt.Errorf("%s has no targets", ConfigFilename)
 	}
 	if name == "" {
 		name = c.Target
 	}
 	if name == "" {
-		return Target{}, fmt.Errorf("%s target is not set", ConfigFilename)
+		return NamedTarget{}, fmt.Errorf("%s target is not set", ConfigFilename)
 	}
 	target, ok := c.Targets[name]
 	if !ok {
-		return Target{}, fmt.Errorf("%s has no target %q", ConfigFilename, name)
+		return NamedTarget{}, fmt.Errorf("%s has no target %q", ConfigFilename, name)
 	}
 	if target.Board == "" || target.Source == "" {
-		return Target{}, fmt.Errorf("%s target %q needs a board and source", ConfigFilename, name)
+		return NamedTarget{}, fmt.Errorf("%s target %q needs a board and source", ConfigFilename, name)
 	}
-	target.Name = name
-	return target, nil
+	return NamedTarget{Name: name, Target: target}, nil
 }
 
 // Boards returns each distinct target board, sorted.
@@ -70,10 +77,17 @@ func (c Config) Boards() []string {
 	return out
 }
 
-// ReadConfig decodes windlock.yml from r. Unknown fields are an error.
+// ReadConfig decodes windlock.yml from r. Unknown fields are an error, and
+// a file without a schema field is schema 1.
 func ReadConfig(r io.Reader) (Config, error) {
 	var cfg Config
 	if err := decode(r, ConfigFilename, &cfg); err != nil {
+		return Config{}, err
+	}
+	if cfg.Schema == 0 {
+		cfg.Schema = 1
+	}
+	if err := cfg.CheckSchema(); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -91,8 +105,9 @@ func ReadConfigFile(path string) (Config, error) {
 
 // WriteConfigFile writes a new windlock.yml at path.
 func WriteConfigFile(path string, cfg Config) error {
+	cfg.Schema = ConfigSchema
 	return writeAtomic(path, func(w io.Writer) error {
-		if _, err := io.WriteString(w, configHeader); err != nil {
+		if _, err := io.WriteString(w, schemaComment(ConfigSchemaURL)+configHeader); err != nil {
 			return err
 		}
 		return encode(w, cfg)
@@ -128,7 +143,6 @@ func (c *Config) AddTarget(name string, t Target) error {
 	if c.Targets == nil {
 		c.Targets = map[string]Target{}
 	}
-	t.Name = ""
 	c.Targets[name] = t
 	if c.Target == "" {
 		c.Target = name

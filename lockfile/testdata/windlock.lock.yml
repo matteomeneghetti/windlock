@@ -1,4 +1,4 @@
-schema: 3
+schema: 1
 west: fixture-west
 container:
   image: fixture-image@sha256:fixture

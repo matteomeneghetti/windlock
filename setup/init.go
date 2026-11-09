@@ -125,6 +125,7 @@ func loadConfig(appDir, revision string, log io.Writer) (lockfile.Config, lockfi
 	case !os.IsNotExist(err):
 		return lockfile.Config{}, lockfile.Lockfile{}, err
 	default:
+		cfg.Schema = lockfile.ConfigSchema
 		if !manifest {
 			cfg.Zephyr = []string{revision}
 		}

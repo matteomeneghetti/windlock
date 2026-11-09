@@ -1,4 +1,5 @@
-schema: 3
+# yaml-language-server: $schema=https://raw.githubusercontent.com/matteomeneghetti/windlock/main/schema/lockfile-v1.json
+schema: 1
 west: 1.5.0
 container:
   image: ghcr.io/zephyrproject-rtos/ci-base@sha256:0a4e08683a5582748696dd28d1633566be04218174811eb532e170a13e14959b

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/matteomeneghetti/windlock/main/schema/config-v1.json",
+  "title": "Config",
+  "description": "windlock.yml, schema 1: the Zephyr revisions to install and the build targets. windlock writes this file; see lockfile/SCHEMA.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "description": "The config format version. A file without it is schema 1.",
+      "type": "integer",
+      "const": 1,
+      "default": 1
+    },
+    "zephyr": {
+      "description": "Upstream revisions, the first being the default; empty in a west.yml project, whose manifest names the revision.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "target": {
+      "description": "The target build uses when the command names none.",
+      "type": "string",
+      "default": ""
+    },
+    "targets": {
+      "description": "The build targets by name. A name is one path segment, since it names build/<name>.",
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9._-]+$", "not": {"enum": [".", ".."]}},
+      "additionalProperties": {"$ref": "#/$defs/Target"}
+    }
+  },
+  "$defs": {
+    "Target": {
+      "description": "One build.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["board", "source"],
+      "properties": {
+        "board": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "sysbuild": {
+          "description": "Builds the target with west build --sysbuild, which also builds and signs companion images such as MCUboot.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  }
+}
