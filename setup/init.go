@@ -2,6 +2,7 @@
 package setup
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -105,6 +106,11 @@ func lockEntries(entries []lockfile.Zephyr, west, triple string, log io.Writer) 
 func loadConfig(appDir, revision string, log io.Writer) (lockfile.Config, lockfile.Lockfile, error) {
 	cfgPath := filepath.Join(appDir, lockfile.ConfigFilename)
 	lock, err := lockfile.ReadFile(filepath.Join(appDir, lockfile.Filename))
+	if errors.Is(err, lockfile.ErrReinit) {
+		// init is the fix for a lockfile too old to read: lock afresh.
+		fmt.Fprintf(log, "%s is in a format this windlock no longer reads; writing a new one, so Python packages are resolved again\n", lockfile.Filename)
+		lock, err = lockfile.Lockfile{}, nil
+	}
 	if err != nil && !os.IsNotExist(err) {
 		return lockfile.Config{}, lockfile.Lockfile{}, err
 	}

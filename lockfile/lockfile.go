@@ -3,6 +3,7 @@ package lockfile
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,17 +34,22 @@ const SchemaURL = "https://raw.githubusercontent.com/matteomeneghetti/windlock/m
 // schema 3 ships.
 const prereleaseSchema = 3
 
-// CheckSchema fails for a lockfile this windlock cannot read.
+// ErrReinit marks a lockfile too old for this windlock to read. windlock
+// init replaces such a file instead of reading it.
+var ErrReinit = errors.New("rerun windlock init to rewrite it")
+
+// CheckSchema fails for a lockfile this windlock cannot read. Errors for
+// files that init can rewrite wrap ErrReinit.
 func (l Lockfile) CheckSchema() error {
 	switch {
 	case l.Schema >= MinSchema && l.Schema <= Schema:
 		return nil
 	case l.Schema == prereleaseSchema:
-		return fmt.Errorf("%s was written by a pre-release windlock; rerun windlock init to rewrite it", Filename)
+		return fmt.Errorf("%s was written by a pre-release windlock; %w", Filename, ErrReinit)
 	case l.Schema > Schema:
 		return fmt.Errorf("%s is schema %d; this windlock reads up to schema %d; upgrade windlock", Filename, l.Schema, Schema)
 	default:
-		return fmt.Errorf("%s is schema %d; this windlock reads schema %d to %d; rerun windlock init to rewrite it", Filename, l.Schema, MinSchema, Schema)
+		return fmt.Errorf("%s is schema %d; this windlock reads schema %d to %d; %w", Filename, l.Schema, MinSchema, Schema, ErrReinit)
 	}
 }
 

@@ -199,3 +199,29 @@ func TestLoadConfigZephyrFlag(t *testing.T) {
 		t.Fatalf("--zephyr in a west.yml project err %v", err)
 	}
 }
+
+func TestLoadConfigReplacesUnreadableOldLockfile(t *testing.T) {
+	app := t.TempDir()
+	lockPath := filepath.Join(app, lockfile.Filename)
+	if err := os.WriteFile(lockPath, []byte("schema: 3\nwest: 1.5.0\nold_field: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var log strings.Builder
+	cfg, prev, err := loadConfig(app, "", &log)
+	if err != nil {
+		t.Fatalf("pre-release lockfile err %v", err)
+	}
+	if prev.West != "" || len(prev.Zephyr) != 0 || len(cfg.Zephyr) != 1 {
+		t.Fatalf("config %+v prev %+v", cfg, prev)
+	}
+	if !strings.Contains(log.String(), "writing a new one") {
+		t.Fatalf("log %q", log.String())
+	}
+	// A newer lockfile is never replaced: that would downgrade it.
+	if err := os.WriteFile(lockPath, []byte("schema: 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loadConfig(app, "", io.Discard); err == nil || !strings.Contains(err.Error(), "upgrade windlock") {
+		t.Fatalf("newer lockfile err %v", err)
+	}
+}
