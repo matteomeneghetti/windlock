@@ -9,12 +9,12 @@ import (
 	"os"
 	"strings"
 
-	"windlock/container"
-	"windlock/host"
-	"windlock/invoke"
-	"windlock/lockfile"
-	"windlock/setup"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/invoke"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // version is set at build time by scripts/build.sh.

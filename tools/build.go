@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
 )
 
 func installArchive(root string, a Archive, log io.Writer) (string, error) {

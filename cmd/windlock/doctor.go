@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"windlock/container"
-	"windlock/doctor"
-	"windlock/invoke"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/doctor"
+	"github.com/matteomeneghetti/windlock/invoke"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // cmdDoctor prints one line per check, and exits 1 if any failed.

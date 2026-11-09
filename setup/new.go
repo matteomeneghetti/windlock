@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/template"
 
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 //go:embed templates

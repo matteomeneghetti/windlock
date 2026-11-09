@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"windlock/host"
+	"github.com/matteomeneghetti/windlock/host"
 )
 
 // Install downloads, verifies and installs the pinned host tools under the

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/internal/envvar"
-	"windlock/lockfile"
-	"windlock/setup"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 const (

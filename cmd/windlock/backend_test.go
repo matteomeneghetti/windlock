@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/container"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // containerProject switches to the container backend with a fake engine

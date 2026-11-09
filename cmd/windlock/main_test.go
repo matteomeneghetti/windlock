@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/host"
-	"windlock/invoke"
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/invoke"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 func TestCLIHost(t *testing.T) {

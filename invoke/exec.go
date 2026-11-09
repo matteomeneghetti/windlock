@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"windlock/host"
-	"windlock/internal/envvar"
-	"windlock/lockfile"
-	"windlock/setup"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // ExitError is a child that ran and exited non-zero. The child has already

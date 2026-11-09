@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/host"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // managedProject is an initialised project on a fake root: both trees and SDKs

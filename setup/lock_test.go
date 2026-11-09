@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata golden files")

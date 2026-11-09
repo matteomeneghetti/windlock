@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/container"
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 // The fake engine answers from $INFO_EXIT, $IMAGE_EXIT, $VOLUME_EXIT and $RUN_OUT.

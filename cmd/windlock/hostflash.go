@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"windlock/container"
-	"windlock/flash"
-	"windlock/invoke"
-	"windlock/lockfile"
-	"windlock/setup"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/flash"
+	"github.com/matteomeneghetti/windlock/invoke"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // hostWest are the west commands that run on the host, where the probe is

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
 )
 
 // uvEnv keeps uv's cache under the root and stops it reading user config or

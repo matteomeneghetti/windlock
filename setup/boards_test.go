@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 // testBoardRoots are the fixture project, Zephyr tree, and one module that

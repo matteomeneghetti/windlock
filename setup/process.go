@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
 )
 
 func childEnv(hostBin, venv, root, tmp string) []string {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 func TestReadSDKVersion(t *testing.T) {

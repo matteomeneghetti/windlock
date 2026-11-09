@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // hostEnv is what every west child needs: the toolchain root, this host's

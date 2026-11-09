@@ -1,4 +1,4 @@
-module windlock
+module github.com/matteomeneghetti/windlock
 
 go 1.22
 

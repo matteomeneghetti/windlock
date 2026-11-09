@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"windlock/container"
-	"windlock/flash"
-	"windlock/lockfile"
-	"windlock/setup"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/flash"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
 )
 
 // Status is how a check went.

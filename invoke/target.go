@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"windlock/internal/envvar"
-	"windlock/lockfile"
-	"windlock/setup"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
 )
 
 // Command is one west invocation.

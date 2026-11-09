@@ -3,7 +3,7 @@ package tools
 import (
 	"fmt"
 
-	"windlock/host"
+	"github.com/matteomeneghetti/windlock/host"
 )
 
 // Kind selects how an archive is installed.

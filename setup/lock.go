@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"windlock/host"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // assembleLock builds the lockfile for entries from the pins and each SDK's

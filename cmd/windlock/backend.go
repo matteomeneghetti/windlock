@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"windlock/container"
-	"windlock/internal/linuxbin"
-	"windlock/internal/rootlock"
-	"windlock/internal/tty"
-	"windlock/invoke"
-	"windlock/lockfile"
-	"windlock/setup"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/internal/linuxbin"
+	"github.com/matteomeneghetti/windlock/internal/rootlock"
+	"github.com/matteomeneghetti/windlock/internal/tty"
+	"github.com/matteomeneghetti/windlock/invoke"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // routed are the commands that run inside the container. Everything that

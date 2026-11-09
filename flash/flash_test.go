@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/internal/envvar"
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 func write(t *testing.T, path, text string) {

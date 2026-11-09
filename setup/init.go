@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"windlock/host"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 const (

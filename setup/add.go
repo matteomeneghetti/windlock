@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // ZephyrAdd installs another Zephyr tag or branch beside the default and

@@ -15,8 +15,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"windlock/internal/envvar"
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 // Workspace is the host west workspace for one Zephyr commit.

@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 // boardTarget is one buildable board target, as its Twister YAML records it.

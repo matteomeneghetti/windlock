@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"windlock/host"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // managed is a project whose windlock.yml and windlock.lock.yml agree, ready to

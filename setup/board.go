@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"windlock/host"
-	"windlock/lockfile"
-	"windlock/tools"
+	"github.com/matteomeneghetti/windlock/host"
+	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // readSDKVersion returns the SDK release named by zephyr/SDK_VERSION.

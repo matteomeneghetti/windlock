@@ -3,7 +3,7 @@ package setup
 import (
 	"path/filepath"
 
-	"windlock/internal/envvar"
+	"github.com/matteomeneghetti/windlock/internal/envvar"
 )
 
 // Isolate points every child's caches (pip, ccache, XDG, so also Zephyr's

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/lockfile"
 )
 
 func TestConfigMatches(t *testing.T) {

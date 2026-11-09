@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"windlock/host"
+	"github.com/matteomeneghetti/windlock/host"
 )
 
 // Version is one pinned tool version. The host-tools id hashes these and
