@@ -2,10 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/matteomeneghetti/windlock/main/schema/lockfile-v1.json",
   "title": "Lockfile",
-  "description": "windlock.lock.yml, schema 1. Everything above platforms is the same on every host; each platform lists the archives that host downloads. windlock writes this file; see lockfile/SCHEMA.md.",
+  "description": "windlock.lock.yml, schema 1. Everything above platforms is the same on every host; each platform lists what that host installs. windlock writes this file; see lockfile/SCHEMA.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "west", "container", "host_tools", "zephyr", "platforms"],
+  "required": [
+    "schema",
+    "west",
+    "container",
+    "sources",
+    "zephyr",
+    "platforms"
+  ],
   "properties": {
     "schema": {
       "description": "The lockfile format version.",
@@ -21,21 +28,34 @@
       "description": "The image every container-backend command runs in.",
       "$ref": "#/$defs/Container"
     },
-    "host_tools": {
-      "description": "Each pinned host program and its version, the same on every host.",
+    "sources": {
+      "description": "Source tarballs the tool recipes build with, the same on every host: m4, flex and bison for dtc, libusb for dfu-util.",
       "type": "object",
-      "additionalProperties": {"type": "string", "minLength": 1}
+      "additionalProperties": {
+        "$ref": "#/$defs/Tool"
+      }
     },
     "zephyr": {
       "description": "Side-by-side Zephyr revisions. The first entry is the default.",
       "type": "array",
-      "items": {"$ref": "#/$defs/Zephyr"}
+      "items": {
+        "$ref": "#/$defs/Zephyr"
+      }
     },
     "platforms": {
       "description": "What each host triple downloads.",
       "type": "object",
-      "propertyNames": {"enum": ["macos-aarch64", "macos-x86_64", "linux-x86_64", "linux-aarch64"]},
-      "additionalProperties": {"$ref": "#/$defs/Platform"}
+      "propertyNames": {
+        "enum": [
+          "macos-aarch64",
+          "macos-x86_64",
+          "linux-x86_64",
+          "linux-aarch64"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Platform"
+      }
     }
   },
   "$defs": {
@@ -43,68 +63,181 @@
       "description": "Names the image by digest, so every host runs the same one.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["image"],
+      "required": [
+        "image"
+      ],
       "properties": {
-        "image": {"type": "string", "pattern": "@sha256:[0-9a-f]{64}$"}
+        "image": {
+          "type": "string",
+          "pattern": "@sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "Zephyr": {
       "description": "One side-by-side Zephyr revision entry.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "url", "revision", "commit", "sdk", "toolchains", "manifest_sha256", "projects", "python_inputs_sha256", "python_requirements"],
+      "required": [
+        "name",
+        "url",
+        "revision",
+        "commit",
+        "sdk",
+        "toolchains",
+        "manifest_sha256",
+        "projects",
+        "python_inputs_sha256",
+        "python_requirements"
+      ],
       "properties": {
-        "name": {"type": "string", "minLength": 1},
-        "url": {"type": "string", "minLength": 1},
-        "revision": {"type": "string", "minLength": 1},
-        "commit": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"},
-        "sdk": {"description": "The Zephyr SDK version the entry builds with.", "type": "string", "minLength": 1},
-        "toolchains": {"type": "array", "items": {"type": "string"}},
-        "manifest_sha256": {"description": "Hash of west manifest --freeze for the entry.", "type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
-        "projects": {"type": "array", "items": {"$ref": "#/$defs/Project"}},
-        "python_inputs_sha256": {"description": "Hashes the requirement files the Python pins were resolved from.", "type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
-        "python_requirements": {"description": "The virtual environment's packages, \"name==version[ ; marker]\".", "type": "array", "minItems": 1, "items": {"type": "string"}}
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "sdk": {
+          "description": "The Zephyr SDK version the entry builds with.",
+          "type": "string",
+          "minLength": 1
+        },
+        "toolchains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "manifest_sha256": {
+          "description": "Hash of west manifest --freeze for the entry.",
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Project"
+          }
+        },
+        "python_inputs_sha256": {
+          "description": "Hashes the requirement files the Python pins were resolved from.",
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "python_requirements": {
+          "description": "The virtual environment's packages, \"name==version[ ; marker]\".",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "Project": {
       "description": "One west project from west manifest --freeze --active-only.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "path", "revision"],
+      "required": [
+        "name",
+        "path",
+        "revision"
+      ],
       "properties": {
-        "name": {"type": "string"},
-        "path": {"type": "string"},
-        "revision": {"type": "string"}
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
       }
     },
     "Platform": {
-      "description": "What one host triple downloads.",
+      "description": "What one host triple installs.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "host_tools": {"type": "object", "additionalProperties": {"$ref": "#/$defs/Archive"}},
-        "sdk": {"type": "object", "additionalProperties": {"$ref": "#/$defs/Bundle"}}
+        "build_tools": {
+          "description": "The tools the container builds with; Linux triples only.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Tool"
+          }
+        },
+        "flash_tools": {
+          "description": "The tools a host with the probe flashes and debugs with.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Tool"
+          }
+        },
+        "sdk": {
+          "description": "The Zephyr SDK bundle for each SDK version; Linux triples only.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Bundle"
+          }
+        }
       }
     },
     "Bundle": {
       "description": "One SDK archive for a host triple.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["filename", "url", "sha256"],
+      "required": [
+        "filename",
+        "url",
+        "sha256"
+      ],
       "properties": {
-        "filename": {"type": "string", "minLength": 1},
-        "url": {"type": "string", "pattern": "^https://"},
-        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+        "filename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
       }
     },
-    "Archive": {
-      "description": "One download and its sha256.",
+    "Tool": {
+      "description": "One locked download: windlock installs it with the recipe for its name.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "sha256"],
+      "required": [
+        "version",
+        "url",
+        "sha256"
+      ],
       "properties": {
-        "url": {"type": "string", "pattern": "^https://"},
-        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
       }
     }
   }

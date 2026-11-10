@@ -50,17 +50,17 @@ func ZephyrAdd(appDir, revision string, log io.Writer) error {
 			return fmt.Errorf("%s resolved to the existing commit %s", ref, commit)
 		}
 	}
-	fmt.Fprintf(log, "reusing host tools %s\n", h.hostBin)
+	fmt.Fprintf(log, "reusing build tools %s\n", h.hostBin)
 	spec := entrySpec{
 		name: name, url: zephyrURL, revision: ref, commit: commit,
-		checkTree:     func(zephyrDir string) error { return floorsMatch(zephyrDir, h.root, h.triple) },
+		checkTree:     func(zephyrDir string) error { return floorsMatch(zephyrDir, h.root, lock, h.triple) },
 		resolvePython: true,
 	}
 	entry, _, err := prepareEntry(h, m.appDir, spec, "west=="+lock.West, cfg.Boards())
 	if err != nil {
 		return err
 	}
-	next, err := lockEntries(append(append([]lockfile.Zephyr(nil), lock.Zephyr...), entry), lock.West, h.triple, log)
+	next, err := lockEntries(append(append([]lockfile.Zephyr(nil), lock.Zephyr...), entry), lock.West, h.triple, lockedPins(lock), log)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func ZephyrAdd(appDir, revision string, log io.Writer) error {
 func requireHostBin(bin string) error {
 	for _, name := range []string{"cmake", "python3", "dtc"} {
 		if _, err := os.Stat(filepath.Join(bin, name)); err != nil {
-			return fmt.Errorf("host tools bin %s: %w", bin, err)
+			return fmt.Errorf("build tools bin %s: %w", bin, err)
 		}
 	}
 	return nil
@@ -83,16 +83,16 @@ var (
 	dtcFloorRE    = regexp.MustCompile(`find_package\(Dtc\s+([0-9.]+)\)`)
 )
 
-// floorsMatch reuses the installed host tools when this tree's CMake, Python,
-// and dtc floors are within the versions already pinned for this host.
-func floorsMatch(zephyrDir, root, triple string) error {
-	pins, err := tools.HostPins(triple)
+// floorsMatch reuses the installed build tools when this tree's CMake,
+// Python, and dtc floors are within the versions lock pins for this host.
+func floorsMatch(zephyrDir, root string, lock lockfile.Lockfile, triple string) error {
+	set, err := BuildSet(lock, triple)
 	if err != nil {
 		return err
 	}
 	have := map[string]string{}
-	for _, pin := range pins {
-		have[pin.Name] = pin.Version
+	for _, t := range set.Tools {
+		have[t.Name] = t.Version
 	}
 	checks := []struct {
 		file, reName, tool string

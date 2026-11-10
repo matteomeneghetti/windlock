@@ -40,11 +40,11 @@ func Sync(appDir string, log io.Writer) error {
 	if err := usablePlatform(lock, triple); err != nil {
 		return err
 	}
-	pins, err := tools.HostPins(triple)
+	set, err := BuildSet(lock, triple)
 	if err != nil {
 		return err
 	}
-	if err := checkHostTools(lock, triple, pins); err != nil {
+	if err := tools.Validate(set); err != nil {
 		return err
 	}
 	sums, err := fetchSums(lock.SDKs(), log)
@@ -58,15 +58,12 @@ func Sync(appDir string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(log, "installing host tools\n")
-	if err := tools.Install(log); err != nil {
-		return err
-	}
-	id, err := hostToolsID(lock, triple)
+	fmt.Fprintf(log, "installing build tools\n")
+	bin, err := tools.Install(set, log)
 	if err != nil {
 		return err
 	}
-	h := hostEnv{root: root, triple: triple, hostBin: tools.BinDir(root, id), log: log}
+	h := hostEnv{root: root, triple: triple, hostBin: bin, log: log}
 	var observed []lockfile.Zephyr
 	for _, entry := range lock.Zephyr {
 		spec := entrySpec{
@@ -79,7 +76,9 @@ func Sync(appDir string, log io.Writer) error {
 		}
 		observed = append(observed, got)
 	}
-	regenerated, err := assembleLock(observed, lock.West, sums, triple)
+	// The pins are the lockfile's own: what sync checks is what this host
+	// observed, the Zephyr trees, Python packages and SDK bundles.
+	regenerated, err := assembleLock(observed, lock.West, sums, lockedPins(lock), triple)
 	if err != nil {
 		return err
 	}

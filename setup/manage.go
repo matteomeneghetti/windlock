@@ -106,7 +106,7 @@ func (m managed) relock(cfg lockfile.Config, lock lockfile.Lockfile) (lockfile.L
 		entry.Toolchains = toolchains
 		entries[i] = entry
 	}
-	return lockEntries(entries, lock.West, m.h.triple, m.h.log)
+	return lockEntries(entries, lock.West, m.h.triple, lockedPins(lock), m.h.log)
 }
 
 // TargetAdd adds a build target to windlock.yml and locks the toolchains its
@@ -247,7 +247,7 @@ func ZephyrRemove(appDir, revision string, log io.Writer) error {
 		return err
 	}
 	lock.RemoveZephyr(i)
-	next, err := lockEntries(lock.Zephyr, lock.West, m.h.triple, log)
+	next, err := lockEntries(lock.Zephyr, lock.West, m.h.triple, lockedPins(lock), log)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func ZephyrDefault(appDir, revision string, log io.Writer) error {
 		return err
 	}
 	lock.MoveZephyrFirst(i)
-	next, err := lockEntries(lock.Zephyr, lock.West, m.h.triple, log)
+	next, err := lockEntries(lock.Zephyr, lock.West, m.h.triple, lockedPins(lock), log)
 	if err != nil {
 		return err
 	}

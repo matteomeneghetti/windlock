@@ -2,7 +2,6 @@
 package setup
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -38,15 +37,21 @@ func Init(appDir, revision string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(log, "installing host tools\n")
-	if err := tools.Install(log); err != nil {
-		return err
-	}
-	id, err := tools.CurrentID()
+	// init locks this windlock's pins, and installs them the way every
+	// other command installs a lockfile's.
+	pins, err := defaultPins()
 	if err != nil {
 		return err
 	}
-	h := hostEnv{root: root, triple: triple, hostBin: tools.BinDir(root, id), log: log}
+	if len(pins.build[triple]) == 0 {
+		return fmt.Errorf("windlock has no build tools for %s", triple)
+	}
+	fmt.Fprintf(log, "installing build tools\n")
+	bin, err := tools.Install(tools.Set{Tools: fromLockTools(pins.build[triple]), Sources: fromLockTools(pins.sources)}, log)
+	if err != nil {
+		return err
+	}
+	h := hostEnv{root: root, triple: triple, hostBin: bin, log: log}
 	if err := tools.CheckPython312(h.python()); err != nil {
 		return err
 	}
@@ -79,7 +84,7 @@ func Init(appDir, revision string, log io.Writer) error {
 		}
 		entries = append(entries, entry)
 	}
-	lock, err := lockEntries(entries, west, triple, log)
+	lock, err := lockEntries(entries, west, triple, pins, log)
 	if err != nil {
 		return err
 	}
@@ -92,13 +97,13 @@ func Init(appDir, revision string, log io.Writer) error {
 }
 
 // lockEntries reads the sha256.sum of every SDK the entries use and
-// assembles the lockfile.
-func lockEntries(entries []lockfile.Zephyr, west, triple string, log io.Writer) (lockfile.Lockfile, error) {
+// assembles the lockfile with pins.
+func lockEntries(entries []lockfile.Zephyr, west, triple string, pins pinSection, log io.Writer) (lockfile.Lockfile, error) {
 	sums, err := fetchSums(lockfile.Lockfile{Zephyr: entries}.SDKs(), log)
 	if err != nil {
 		return lockfile.Lockfile{}, err
 	}
-	return assembleLock(entries, west, sums, triple)
+	return assembleLock(entries, west, sums, pins, triple)
 }
 
 // loadConfig reads or creates windlock.yml (with revision, if given) and returns
@@ -106,11 +111,6 @@ func lockEntries(entries []lockfile.Zephyr, west, triple string, log io.Writer) 
 func loadConfig(appDir, revision string, log io.Writer) (lockfile.Config, lockfile.Lockfile, error) {
 	cfgPath := filepath.Join(appDir, lockfile.ConfigFilename)
 	lock, err := lockfile.ReadFile(filepath.Join(appDir, lockfile.Filename))
-	if errors.Is(err, lockfile.ErrReinit) {
-		// init is the fix for a lockfile too old to read: lock afresh.
-		fmt.Fprintf(log, "%s is in a format this windlock no longer reads; writing a new one, so Python packages are resolved again\n", lockfile.Filename)
-		lock, err = lockfile.Lockfile{}, nil
-	}
 	if err != nil && !os.IsNotExist(err) {
 		return lockfile.Config{}, lockfile.Lockfile{}, err
 	}

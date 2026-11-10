@@ -10,20 +10,20 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/matteomeneghetti/windlock/internal/envvar"
+	"sync"
 )
 
-func installArchive(root string, a Archive, log io.Writer) (string, error) {
-	fmt.Fprintf(log, "%s: checking cache\n", a.Name)
-	path, cached, err := ensureArchive(root, a.URL, a.SHA256, a.File)
+func installArchive(root string, t Tool, log io.Writer) (string, error) {
+	fmt.Fprintf(log, "%s: checking cache\n", t.Name)
+	file := fileName(t)
+	path, cached, err := ensureArchive(root, t.URL, t.SHA256, file)
 	if err != nil {
 		return "", err
 	}
 	if cached {
-		fmt.Fprintf(log, "%s: cached archive matches sha256\n", a.Name)
+		fmt.Fprintf(log, "%s: cached archive matches sha256\n", t.Name)
 	} else {
-		fmt.Fprintf(log, "%s: downloaded %s\n", a.Name, a.File)
+		fmt.Fprintf(log, "%s: downloaded %s\n", t.Name, file)
 	}
 	return path, nil
 }
@@ -43,125 +43,264 @@ func stageExtract(root, sum, archive string, strip int) (string, error) {
 	return stage, nil
 }
 
-func buildAutotools(root, archive, srcDir, prefix string, extraPATH []string, log io.Writer) error {
-	return buildAutotoolsWith(root, archive, srcDir, prefix, commandEnv(extraPATH), nil, log)
+// extractSource unpacks a source tarball into a fresh cache/build/<sum> and
+// returns its single top directory, whatever the version names it.
+func extractSource(root, archive, sum string) (string, error) {
+	dir := filepath.Join(root, "cache", "build", strings.ToLower(sum))
+	if err := os.RemoveAll(dir); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	if err := extractTar(archive, dir, 0); err != nil {
+		return "", err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) != 1 || !entries[0].IsDir() {
+		return "", fmt.Errorf("%s does not unpack to one top directory", filepath.Base(archive))
+	}
+	return filepath.Join(dir, entries[0].Name()), nil
 }
 
-// buildAutotoolsWith runs configure --prefix=prefix with args, make and make
-// install for a source archive, in env.
-func buildAutotoolsWith(root, archive, srcDir, prefix string, env, args []string, log io.Writer) error {
-	srcParent := filepath.Join(root, "cache", "build")
-	src := filepath.Join(srcParent, srcDir)
-	if err := os.RemoveAll(src); err != nil {
+// buildFromSource runs configure --prefix=prefix with args, make and make
+// install for a source archive, in the clean build environment with
+// extraPATH first on its PATH.
+func buildFromSource(root, archive, sum, prefix string, extraPATH, args []string, log io.Writer) error {
+	return buildFromSourceEnv(root, archive, sum, prefix, buildEnv(root, extraPATH), args, log)
+}
+
+func buildFromSourceEnv(root, archive, sum, prefix string, env, args []string, log io.Writer) error {
+	src, err := extractSource(root, archive, sum)
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(srcParent, 0o755); err != nil {
-		return err
-	}
-	if err := extractTar(archive, srcParent, 0); err != nil {
-		return err
-	}
+	name := filepath.Base(src)
 	if _, err := os.Stat(filepath.Join(src, "configure")); err != nil {
-		return fmt.Errorf("%s has no configure", srcDir)
+		return fmt.Errorf("%s has no configure", name)
 	}
-	fmt.Fprintf(log, "%s: configuring\n", srcDir)
+	fmt.Fprintf(log, "%s: configuring\n", name)
 	if err := runLogged(log, src, env, filepath.Join(src, "configure"), append([]string{"--prefix=" + prefix}, args...)...); err != nil {
 		return err
 	}
-	jobs := strconv.Itoa(jobCount())
-	fmt.Fprintf(log, "%s: building\n", srcDir)
-	if err := runLogged(log, src, env, "make", "-j"+jobs); err != nil {
+	fmt.Fprintf(log, "%s: building\n", name)
+	if err := runLogged(log, src, env, "make", "-j"+strconv.Itoa(jobCount())); err != nil {
 		return err
 	}
-	fmt.Fprintf(log, "%s: installing\n", srcDir)
+	fmt.Fprintf(log, "%s: installing\n", name)
 	return runLogged(log, src, env, "make", "install")
 }
 
-func ensureBuildTools(root string, log io.Writer) error {
-	prefix := filepath.Join(root, "cache", "build-tools")
-	bin := filepath.Join(prefix, "bin")
-	marker := func(name string) string { return filepath.Join(prefix, ".installed", name) }
-	done := map[string]bool{}
-	for _, dep := range dtcBuildDeps {
-		done[dep.Name] = installed(marker(dep.Name), filepath.Join(bin, dep.Name), dep.SHA256)
+// ensureSource builds source name from s, and the sources it needs, each
+// into its own cache/build-tools/<key>, and returns that prefix. A prefix
+// is named by what went into it, so it is never rebuilt for another
+// version or overwritten by one.
+func ensureSource(root string, s Set, name string, log io.Writer) (string, error) {
+	t, ok := findTool(s.Sources, name)
+	if !ok {
+		return "", fmt.Errorf("the lockfile lists no source %s", name)
 	}
-	if done["m4"] && done["flex"] && done["bison"] {
-		return nil
+	r := sourceRecipes[name]
+	prefix := filepath.Join(root, "cache", "build-tools", sourceKey(s, name))
+	marker := filepath.Join(prefix, ".installed")
+	product := filepath.Join(prefix, "bin", name)
+	if r.kind == kindLibusb {
+		product = filepath.Join(prefix, "lib", "libusb-1.0.a")
+	}
+	if installed(marker, product, t.SHA256) {
+		return prefix, nil
 	}
 	var path []string
-	if done["m4"] {
-		path = []string{bin}
-	}
-	for _, dep := range dtcBuildDeps {
-		if done[dep.Name] {
-			continue
-		}
-		arc, err := installArchive(root, dep, log)
+	for _, need := range r.needs {
+		p, err := ensureSource(root, s, need, log)
 		if err != nil {
-			return err
+			return "", err
 		}
-		if err := buildAutotools(root, arc, dep.SrcDir, prefix, path, log); err != nil {
-			return fmt.Errorf("%s: %w", dep.Name, err)
-		}
-		if _, err := os.Stat(filepath.Join(bin, dep.Name)); err != nil {
-			return fmt.Errorf("build tool %s was not installed", dep.Name)
-		}
-		if err := copyToMode(strings.NewReader(dep.SHA256+"\n"), marker(dep.Name), 0o644); err != nil {
-			return err
-		}
-		path = []string{bin}
+		path = append(path, filepath.Join(p, "bin"))
 	}
-	return nil
+	arc, err := installArchive(root, t, log)
+	if err != nil {
+		return "", err
+	}
+	if err := os.RemoveAll(prefix); err != nil {
+		return "", err
+	}
+	var args []string
+	if r.kind == kindLibusb {
+		args = []string{"--disable-shared", "--enable-static"}
+		if runtime.GOOS == "linux" {
+			args = append(args, "--disable-udev")
+		}
+	}
+	if err := buildFromSource(root, arc, t.SHA256, prefix, path, args, log); err != nil {
+		return "", fmt.Errorf("%s: %w", name, err)
+	}
+	if _, err := os.Stat(product); err != nil {
+		return "", fmt.Errorf("source %s: %s was not installed", name, product)
+	}
+	return prefix, copyToMode(strings.NewReader(t.SHA256+"\n"), marker, 0o644)
 }
 
-func buildDTC(root, archive, srcDir, bin string, log io.Writer) error {
-	if err := ensureBuildTools(root, log); err != nil {
-		return err
+// sourceBins are the bin directories of names and the sources they need.
+func sourceBins(root string, s Set, names []string, log io.Writer) (map[string]string, []string, error) {
+	prefixes := map[string]string{}
+	var bins []string
+	for _, name := range closure(names) {
+		p, err := ensureSource(root, s, name, log)
+		if err != nil {
+			return nil, nil, err
+		}
+		prefixes[name] = p
+		bins = append(bins, filepath.Join(p, "bin"))
 	}
-	toolsBin := filepath.Join(root, "cache", "build-tools", "bin")
-	srcParent := filepath.Join(root, "cache", "build")
-	src := filepath.Join(srcParent, srcDir)
-	if err := os.RemoveAll(src); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(srcParent, 0o755); err != nil {
-		return err
-	}
-	if err := extractTar(archive, srcParent, 0); err != nil {
-		return err
-	}
-	env := commandEnv([]string{toolsBin})
-	fmt.Fprintf(log, "dtc: building\n")
-	// NO_YAML=1 drops libyaml, but the Makefile still runs $(PKG_CONFIG), which
-	// fails on hosts without pkg-config; pointing it at false avoids shipping one.
-	err := runLogged(log, src, env, "make", dtcMakeArgs(jobCount(), toolsBin)...)
+	return prefixes, bins, nil
+}
+
+func buildDTC(root string, s Set, archive, sum, bin string, log io.Writer) error {
+	prefixes, bins, err := sourceBins(root, s, toolRecipes["dtc"].needs, log)
 	if err != nil {
+		return err
+	}
+	src, err := extractSource(root, archive, sum)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(log, "dtc: building\n")
+	lex := filepath.Join(prefixes["flex"], "bin", "flex")
+	bison := filepath.Join(prefixes["bison"], "bin", "bison")
+	if err := runLogged(log, src, buildEnv(root, bins), "make", dtcMakeArgs(jobCount(), lex, bison)...); err != nil {
 		return err
 	}
 	return copyFile(filepath.Join(src, "dtc"), filepath.Join(bin, "dtc"), 0o755)
 }
 
-func dtcMakeArgs(jobs int, toolsBin string) []string {
+// dtcMakeArgs builds dtc alone. NO_YAML=1 drops libyaml, but the Makefile
+// still runs $(PKG_CONFIG), which fails on hosts without pkg-config;
+// pointing it at false avoids shipping one.
+func dtcMakeArgs(jobs int, lex, bison string) []string {
 	return []string{
 		"-j" + strconv.Itoa(jobs),
 		"dtc",
-		"LEX=" + filepath.Join(toolsBin, "flex"),
-		"BISON=" + filepath.Join(toolsBin, "bison"),
+		"LEX=" + lex,
+		"BISON=" + bison,
 		"NO_YAML=1",
 		"PKG_CONFIG=/usr/bin/false",
 	}
 }
 
-func commandEnv(extraPATH []string) []string {
-	env := os.Environ()
-	if len(extraPATH) == 0 {
-		return env
+// buildEnv is the whole environment of a source build. Nothing comes from
+// the user's: their PATH, CC, CFLAGS, LDFLAGS and PKG_CONFIG_PATH would
+// make builds differ between machines, and HOME and TMPDIR stay under the
+// root so a build writes nowhere else. DEVELOPER_DIR is kept, since it
+// picks the Xcode command line tools on a Mac.
+func buildEnv(root string, extraPATH []string) []string {
+	home := filepath.Join(root, "cache", "build-home")
+	tmp := filepath.Join(root, "cache", "tmp")
+	_ = os.MkdirAll(home, 0o755)
+	_ = os.MkdirAll(tmp, 0o755)
+	path := append([]string(nil), extraPATH...)
+	var dev developerTools
+	if runtime.GOOS == "darwin" {
+		dev = darwinDeveloperTools()
+		path = append(path, dev.bins...)
 	}
-	merged := strings.Join(extraPATH, string(os.PathListSeparator))
-	if cur := os.Getenv("PATH"); cur != "" {
-		merged += string(os.PathListSeparator) + cur
+	path = append(path, "/usr/bin", "/bin", "/usr/sbin", "/sbin")
+	env := []string{
+		"PATH=" + strings.Join(path, string(os.PathListSeparator)),
+		"HOME=" + home,
+		"TMPDIR=" + tmp,
+		"LANG=C",
+		"LC_ALL=C",
+		"SOURCE_DATE_EPOCH=0",
 	}
-	return envvar.Set(env, "PATH", merged)
+	if v := os.Getenv("DEVELOPER_DIR"); v != "" {
+		env = append(env, "DEVELOPER_DIR="+v)
+	}
+	if dev.sdkroot != "" {
+		env = append(env, "SDKROOT="+dev.sdkroot)
+	}
+	return append(env, dev.env...)
+}
+
+// developerTools are the parts of a Mac's developer tools a build runs
+// directly: their bin directories, the SDK, and the compiler variables
+// that name them.
+type developerTools struct {
+	bins    []string
+	sdkroot string
+	env     []string
+}
+
+// darwinDeveloperTools finds the compiler, make and SDK that /usr/bin/cc
+// would use, so a build runs them directly. The /usr/bin shims, and the
+// developer tools' own gcc, cpp and m4 wrappers, run xcrun, which writes its
+// cache to the per-user temp dir whatever TMPDIR says; configure tries gcc
+// before cc, so the compiler is named outright. Without the developer tools
+// it finds nothing, and the shims are used.
+var darwinDeveloperTools = sync.OnceValue(func() developerTools {
+	dev := os.Getenv("DEVELOPER_DIR")
+	if dev == "" {
+		out, err := exec.Command("/usr/bin/xcode-select", "-p").Output()
+		if err != nil {
+			return developerTools{}
+		}
+		dev = strings.TrimSpace(string(out))
+	}
+	var t developerTools
+	for _, dir := range []string{
+		filepath.Join(dev, "Toolchains", "XcodeDefault.xctoolchain", "usr", "bin"), // Xcode's compiler
+		filepath.Join(dev, "usr", "bin"),                                           // Xcode's make; all of the Command Line Tools
+	} {
+		if _, err := os.Stat(filepath.Join(dir, "clang")); err == nil && t.env == nil {
+			t.env = []string{
+				"CC=" + filepath.Join(dir, "clang"),
+				"CXX=" + filepath.Join(dir, "clang++"),
+				"CPP=" + filepath.Join(dir, "clang") + " -E",
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, "gm4")); err == nil {
+			t.env = append(t.env, "M4="+filepath.Join(dir, "gm4"))
+		}
+		if _, err := os.Stat(dir); err == nil {
+			t.bins = append(t.bins, dir)
+		}
+	}
+	for _, sdk := range []string{
+		filepath.Join(dev, "SDKs", "MacOSX.sdk"),
+		filepath.Join(dev, "Platforms", "MacOSX.platform", "Developer", "SDKs", "MacOSX.sdk"),
+	} {
+		if _, err := os.Stat(sdk); err == nil {
+			t.sdkroot = sdk
+			break
+		}
+	}
+	return t
+})
+
+// recordCompiler writes the first line of cc --version, as a source build
+// sees it, to path. It is a record for windlock doctor, so a failure to
+// run cc only leaves it out.
+func recordCompiler(root, path string) {
+	env := buildEnv(root, nil)
+	cc, err := lookPathIn("cc", env)
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "CC="); ok {
+			cc, err = v, nil
+		}
+	}
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(cc, "--version")
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	_ = copyToMode(strings.NewReader(firstLine(string(out))+"\n"), path, 0o644)
 }
 
 func runLogged(log io.Writer, dir string, env []string, name string, args ...string) error {
@@ -169,6 +308,12 @@ func runLogged(log io.Writer, dir string, env []string, name string, args ...str
 	cmd.Dir = dir
 	if env != nil {
 		cmd.Env = env
+		// exec resolves name with this process's PATH; use the build's.
+		if !strings.ContainsRune(name, os.PathSeparator) {
+			if p, err := lookPathIn(name, env); err == nil {
+				cmd.Path = p
+			}
+		}
 	}
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
@@ -182,6 +327,21 @@ func runLogged(log io.Writer, dir string, env []string, name string, args ...str
 		return fmt.Errorf("%s: %w", name, err)
 	}
 	return nil
+}
+
+// lookPathIn finds name on the PATH in env.
+func lookPathIn(name string, env []string) (string, error) {
+	for _, kv := range env {
+		if dirs, ok := strings.CutPrefix(kv, "PATH="); ok {
+			for _, dir := range filepath.SplitList(dirs) {
+				p := filepath.Join(dir, name)
+				if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+					return p, nil
+				}
+			}
+		}
+	}
+	return "", exec.ErrNotFound
 }
 
 func jobCount() int {

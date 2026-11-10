@@ -52,7 +52,7 @@ func TestRegeneratedDiffNamesTheField(t *testing.T) {
 	lock := mustLock(t, "linux-x86_64")
 	observed := testEntries()
 	observed[0].Projects[0].Revision = strings.Repeat("d", 40)
-	regenerated, err := assembleLock(observed, lock.West, testSums, "linux-aarch64")
+	regenerated, err := assembleLock(observed, lock.West, testSums, mustPins(), "linux-aarch64")
 	if err != nil {
 		t.Fatal(err)
 	}

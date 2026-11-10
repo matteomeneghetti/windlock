@@ -68,7 +68,7 @@ windlock target add app --board <board> --source <dir>
 windlock build
 ```
 
-Commit `windlock.yml` and `windlock.lock.yml`. windlock manages both, so don't edit them by hand. Run `windlock --help` to see the commands.
+Commit `windlock.yml` and `windlock.lock.yml`. windlock manages both, so don't edit them by hand. Every tool windlock installs, for building and for flashing, comes from the lockfile, so teammates on different windlock versions still get the same tools. Rerun `windlock init` to move a project to the tool versions your windlock ships with. Run `windlock --help` to see the commands.
 
 ## License
 

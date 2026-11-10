@@ -22,7 +22,7 @@ func managedProject(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := assembleLock(testEntries(), "1.5.0", testSums, triple); err != nil {
+	if _, err := assembleLock(testEntries(), "1.5.0", testSums, mustPins(), triple); err != nil {
 		t.Skipf("test entries cannot lock on %s: %v", triple, err)
 	}
 	stub := fetchSums
@@ -40,7 +40,7 @@ func managedProject(t *testing.T) string {
 		mkdir(t, filepath.Join(sdkDir, "gnu", "arm-zephyr-eabi"))
 		writeFile(t, filepath.Join(sdkDir, "sdk_version"), e.SDK+"\n")
 	}
-	lock, err := assembleLock(entries, "1.5.0", testSums, triple)
+	lock, err := assembleLock(entries, "1.5.0", testSums, mustPins(), triple)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,9 +125,9 @@ func TestTargetAddFailuresWriteNothing(t *testing.T) {
 		{"app", "acme_board", "../elsewhere", "outside"},
 		{"app", "acme_board", "/abs", "relative"},
 		{"a/b", "acme_board", "apps/app", "letters"},
-		// x86 needs a toolchain the fake SDK lacks, and there are no host
+		// x86 needs a toolchain the fake SDK lacks, and there are no build
 		// tools to install it with.
-		{"x86", "acme_x86", "apps/app", "host tools bin"},
+		{"x86", "acme_x86", "apps/app", "build tools bin"},
 		{"bare", "acme_bare", "apps/app", "acme_bare.yaml containing"},
 	}
 	for _, c := range cases {

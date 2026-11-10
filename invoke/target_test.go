@@ -18,8 +18,11 @@ const (
 	testTriple = "linux-x86_64"
 )
 
-// testHostID is the host-tools id testLock selects: one cmake pin.
-var testHostID = tools.ID([]tools.Version{{Name: "cmake", Version: "3.31.12"}})
+// testCMake is testLock's one build tool.
+var testCMake = lockfile.Tool{Version: "3.31.12", URL: "https://example.invalid/cmake.tar.gz", SHA256: strings.Repeat("c", 64)}
+
+// testHostID is the host-tools id testLock selects.
+var testHostID = tools.ID(tools.Set{Tools: []tools.Tool{{Name: "cmake", Version: testCMake.Version, URL: testCMake.URL, SHA256: testCMake.SHA256}}})
 
 func testConfig() lockfile.Config {
 	return lockfile.Config{
@@ -34,8 +37,7 @@ func testConfig() lockfile.Config {
 
 func testLock() lockfile.Lockfile {
 	return lockfile.Lockfile{
-		Schema:    lockfile.Schema,
-		HostTools: map[string]string{"cmake": "3.31.12"},
+		Schema: lockfile.Schema,
 		Zephyr: []lockfile.Zephyr{{
 			Name:   "4.4.1",
 			Commit: testCommit,
@@ -43,8 +45,8 @@ func testLock() lockfile.Lockfile {
 		}},
 		Platforms: map[string]lockfile.Platform{
 			testTriple: {
-				HostTools: map[string]lockfile.Archive{"cmake": {URL: "u", SHA256: "s"}},
-				SDK:       map[string]lockfile.Bundle{testSDK: {Filename: "zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz", SHA256: "abc"}},
+				BuildTools: map[string]lockfile.Tool{"cmake": testCMake},
+				SDK:        map[string]lockfile.Bundle{testSDK: {Filename: "zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz", SHA256: "abc"}},
 			},
 		},
 	}

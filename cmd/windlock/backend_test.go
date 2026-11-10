@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/host"
 	"github.com/matteomeneghetti/windlock/lockfile"
 	"github.com/matteomeneghetti/windlock/tools"
 )
@@ -149,10 +150,15 @@ func hostFlashProject(t *testing.T) (project, westLog string) {
 	containerProject(t)
 	project, _ = os.Getwd()
 	root := os.Getenv(tools.RootEnv)
+	triple, err := host.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ocd := lockfile.Tool{Version: "0.12.0-7", URL: "https://example.invalid/openocd.tar.gz", SHA256: strings.Repeat("a", 64)}
 	lock := lockfile.Lockfile{Schema: lockfile.Schema, Zephyr: []lockfile.Zephyr{{
 		Name: "4.4.2", Commit: strings.Repeat("a", 40), SDK: "1.0.1",
 		PythonInputsSHA256: "in", PythonRequirements: []string{"west==1.5.0"},
-	}}}
+	}}, Platforms: map[string]lockfile.Platform{triple: {FlashTools: map[string]lockfile.Tool{"openocd": ocd}}}}
 	if err := lockfile.WriteFile(lockfile.Filename, lock); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +176,7 @@ func hostFlashProject(t *testing.T) (project, westLog string) {
 	westLog = filepath.Join(t.TempDir(), "west-args")
 	bin := filepath.Join(root, "host", "id", "bin")
 	oldInstall, oldCopy, oldSync := installFlash, copyZephyr, syncVenv
-	installFlash = func(io.Writer) (string, error) { return bin, os.MkdirAll(bin, 0o755) }
+	installFlash = func(tools.Set, io.Writer) (string, error) { return bin, os.MkdirAll(bin, 0o755) }
 	copyZephyr = func(_ string, _ lockfile.Zephyr, dst string) error {
 		p := filepath.Join(dst, "scripts", "west-commands.yml")
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {

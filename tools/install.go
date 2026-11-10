@@ -1,4 +1,6 @@
-// Package tools installs the pinned host tools: CMake, Ninja, CPython, dtc, gperf and uv.
+// Package tools installs the tools a lockfile pins: the build tools the
+// container uses (CMake, Ninja, CPython, uv, dtc, gperf) and the flash tools
+// a host with the probe uses (OpenOCD, dfu-util, with CPython and uv).
 package tools
 
 import (
@@ -7,50 +9,31 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/matteomeneghetti/windlock/host"
 )
 
-// Install downloads, verifies and installs the pinned host tools under the
-// toolchain root; nothing is written outside it. The flash tools are left
-// to InstallFlash.
-func Install(log io.Writer) error {
-	_, err := install(log, func(a Archive) bool { return !a.flashOnly() })
-	return err
-}
-
-// install installs the pins for this host that want selects into the
-// host-tools directory, and returns its bin.
-func install(log io.Writer, want func(Archive) bool) (string, error) {
-	triple, err := host.Current()
-	if err != nil {
-		return "", err
-	}
-	pins, err := HostPins(triple)
-	if err != nil {
+// Install downloads, verifies and installs the tools in s under the
+// toolchain root, and returns their bin directory. Nothing is written
+// outside the root.
+func Install(s Set, log io.Writer) (string, error) {
+	if err := Validate(s); err != nil {
 		return "", err
 	}
 	root, err := Root()
 	if err != nil {
 		return "", err
 	}
-	id := ID(versionsOf(pins))
-	hostDir := filepath.Join(root, "host", id)
+	hostDir := filepath.Join(root, "host", ID(s))
 	bin := filepath.Join(hostDir, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		return "", err
 	}
-	fmt.Fprintf(log, "host %s\n", triple)
 	fmt.Fprintf(log, "prefix %s\n", hostDir)
 	var names []string
-	for _, a := range pins {
-		if !want(a) {
-			continue
-		}
-		if err := installOne(root, hostDir, bin, a, log); err != nil {
+	for _, t := range s.Tools {
+		if err := installOne(root, hostDir, bin, s, t, log); err != nil {
 			return "", err
 		}
-		names = append(names, binName(a))
+		names = append(names, binName(t.Name))
 	}
 	if err := chmodBins(bin); err != nil {
 		return "", err
@@ -58,58 +41,71 @@ func install(log io.Writer, want func(Archive) bool) (string, error) {
 	return bin, checkFloors(bin, names, log)
 }
 
-func installOne(root, hostDir, bin string, a Archive, log io.Writer) error {
-	dest := filepath.Join(bin, binName(a))
-	marker := filepath.Join(hostDir, ".installed", a.Name)
-	if installed(marker, dest, a.SHA256) {
-		fmt.Fprintf(log, "%s: already installed\n", a.Name)
+// BinDirFor is the bin directory Install uses for s under root.
+func BinDirFor(root string, s Set) string { return BinDir(root, ID(s)) }
+
+func installOne(root, hostDir, bin string, s Set, t Tool, log io.Writer) error {
+	dest := filepath.Join(bin, binName(t.Name))
+	marker := filepath.Join(hostDir, ".installed", t.Name)
+	if installed(marker, dest, t.SHA256) {
+		fmt.Fprintf(log, "%s: already installed\n", t.Name)
 		return nil
 	}
-	arc, err := installArchive(root, a, log)
+	arc, err := installArchive(root, t, log)
 	if err != nil {
-		return fmt.Errorf("%s: %w", a.Name, err)
+		return fmt.Errorf("%s: %w", t.Name, err)
 	}
-	fmt.Fprintf(log, "%s: installing\n", a.Name)
-	switch a.Kind {
+	fmt.Fprintf(log, "%s: installing\n", t.Name)
+	r := toolRecipes[t.Name]
+	built := false
+	switch r.kind {
 	case kindCMake:
-		if err := installPrefix(root, hostDir, arc, a.SHA256, "cmake"); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		err = installPrefix(root, hostDir, arc, t.SHA256, "cmake")
 	case kindPython:
-		if err := installPrefix(root, hostDir, arc, a.SHA256, "python3"); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		err = installPrefix(root, hostDir, arc, t.SHA256, "python3")
 	case kindNinja:
-		if err := extractNinja(arc, bin); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		err = extractNinja(arc, bin)
 	case kindUV:
-		if err := installUV(root, arc, a.SHA256, bin); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		err = installUV(root, arc, t.SHA256, bin)
 	case kindOpenOCD:
-		if err := installPrefix(root, hostDir, arc, a.SHA256, "openocd"); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		err = installPrefix(root, hostDir, arc, t.SHA256, "openocd")
 	case kindDFUUtil:
-		if err := buildDFUUtil(root, arc, a.SrcDir, hostDir, log); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		built = true
+		err = buildDFUUtil(root, s, arc, t.SHA256, hostDir, log)
 	case kindGperf:
-		if err := buildAutotools(root, arc, a.SrcDir, hostDir, nil, log); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		built = true
+		err = buildFromSource(root, arc, t.SHA256, hostDir, nil, nil, log)
 	case kindDTC:
-		if err := buildDTC(root, arc, a.SrcDir, bin, log); err != nil {
-			return fmt.Errorf("%s: %w", a.Name, err)
-		}
+		built = true
+		err = buildDTC(root, s, arc, t.SHA256, bin, log)
 	default:
-		return fmt.Errorf("%s: unsupported archive", a.Name)
+		err = fmt.Errorf("unsupported archive")
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", t.Name, err)
 	}
 	if _, err := os.Stat(dest); err != nil {
-		return fmt.Errorf("%s: %s was not installed", a.Name, dest)
+		return fmt.Errorf("%s: %s was not installed", t.Name, dest)
 	}
-	return copyToMode(strings.NewReader(a.SHA256+"\n"), marker, 0o644)
+	if built {
+		recordCompiler(root, filepath.Join(hostDir, ".installed", t.Name+".cc"))
+	}
+	return copyToMode(strings.NewReader(t.SHA256+"\n"), marker, 0o644)
+}
+
+// BuiltWith returns, for each tool in s that windlock built from source
+// under root, the first line of the C compiler's --version it was built
+// with. Container builds use the image's compiler; a Mac's comes from the
+// Xcode command line tools, which windlock does not pin.
+func BuiltWith(root string, s Set) map[string]string {
+	out := map[string]string{}
+	dir := filepath.Join(root, "host", ID(s), ".installed")
+	for _, t := range s.Tools {
+		if raw, err := os.ReadFile(filepath.Join(dir, t.Name+".cc")); err == nil {
+			out[t.Name] = strings.TrimSpace(string(raw))
+		}
+	}
+	return out
 }
 
 // installed reports whether a finished install of the archive with sum is
@@ -177,11 +173,11 @@ func prefixDir(stage, name string) (string, error) {
 	return found, nil
 }
 
-func binName(a Archive) string {
-	if a.Name == "python" {
+func binName(name string) string {
+	if name == "python" {
 		return "python3"
 	}
-	return a.Name
+	return name
 }
 
 func chmodBins(bin string) error {

@@ -2,15 +2,6 @@
 
 package lockfile
 
-// One download and its sha256.
-type Archive struct {
-	// SHA256 corresponds to the JSON schema field "sha256".
-	SHA256 string `yaml:"sha256"`
-
-	// URL corresponds to the JSON schema field "url".
-	URL string `yaml:"url"`
-}
-
 // One SDK archive for a host triple.
 type Bundle struct {
 	// Filename corresponds to the JSON schema field "filename".
@@ -48,20 +39,21 @@ type Container struct {
 }
 
 // windlock.lock.yml, schema 1. Everything above platforms is the same on every
-// host; each platform lists the archives that host downloads. windlock writes this
-// file; see lockfile/SCHEMA.md.
+// host; each platform lists what that host installs. windlock writes this file;
+// see lockfile/SCHEMA.md.
 type Lockfile struct {
 	// The image every container-backend command runs in.
 	Container Container `yaml:"container"`
-
-	// Each pinned host program and its version, the same on every host.
-	HostTools map[string]string `yaml:"host_tools"`
 
 	// What each host triple downloads.
 	Platforms map[string]Platform `yaml:"platforms"`
 
 	// The lockfile format version.
 	Schema int `yaml:"schema"`
+
+	// Source tarballs the tool recipes build with, the same on every host: m4, flex
+	// and bison for dtc, libusb for dfu-util.
+	Sources map[string]Tool `yaml:"sources"`
 
 	// The west version every entry's virtual environment installs.
 	West string `yaml:"west"`
@@ -70,12 +62,15 @@ type Lockfile struct {
 	Zephyr []Zephyr `yaml:"zephyr"`
 }
 
-// What one host triple downloads.
+// What one host triple installs.
 type Platform struct {
-	// HostTools corresponds to the JSON schema field "host_tools".
-	HostTools map[string]Archive `yaml:"host_tools,omitempty"`
+	// The tools the container builds with; Linux triples only.
+	BuildTools map[string]Tool `yaml:"build_tools,omitempty"`
 
-	// SDK corresponds to the JSON schema field "sdk".
+	// The tools a host with the probe flashes and debugs with.
+	FlashTools map[string]Tool `yaml:"flash_tools,omitempty"`
+
+	// The Zephyr SDK bundle for each SDK version; Linux triples only.
 	SDK map[string]Bundle `yaml:"sdk,omitempty"`
 }
 
@@ -102,6 +97,18 @@ type Target struct {
 	// Builds the target with west build --sysbuild, which also builds and signs
 	// companion images such as MCUboot.
 	Sysbuild bool `yaml:"sysbuild,omitempty"`
+}
+
+// One locked download: windlock installs it with the recipe for its name.
+type Tool struct {
+	// SHA256 corresponds to the JSON schema field "sha256".
+	SHA256 string `yaml:"sha256"`
+
+	// URL corresponds to the JSON schema field "url".
+	URL string `yaml:"url"`
+
+	// Version corresponds to the JSON schema field "version".
+	Version string `yaml:"version"`
 }
 
 // One side-by-side Zephyr revision entry.

@@ -15,7 +15,7 @@ import (
 )
 
 // hostEnv is what every west child needs: the toolchain root, this host's
-// triple, the host-tools bin, and where progress goes.
+// triple, the build tools' bin, and where progress goes.
 type hostEnv struct {
 	root, triple, hostBin string
 	log                   io.Writer

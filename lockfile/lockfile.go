@@ -3,7 +3,6 @@ package lockfile
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,27 +28,15 @@ const (
 // it, so editors can validate them.
 const SchemaURL = "https://raw.githubusercontent.com/matteomeneghetti/windlock/main/schema/lockfile-v1.json"
 
-// prereleaseSchema is the number builds before the first release wrote,
-// before the format was versioned from 1. Remove this case before a real
-// schema 3 ships.
-const prereleaseSchema = 3
-
-// ErrReinit marks a lockfile too old for this windlock to read. windlock
-// init replaces such a file instead of reading it.
-var ErrReinit = errors.New("rerun windlock init to rewrite it")
-
-// CheckSchema fails for a lockfile this windlock cannot read. Errors for
-// files that init can rewrite wrap ErrReinit.
+// CheckSchema fails for a lockfile this windlock cannot read.
 func (l Lockfile) CheckSchema() error {
 	switch {
 	case l.Schema >= MinSchema && l.Schema <= Schema:
 		return nil
-	case l.Schema == prereleaseSchema:
-		return fmt.Errorf("%s was written by a pre-release windlock; %w", Filename, ErrReinit)
 	case l.Schema > Schema:
 		return fmt.Errorf("%s is schema %d; this windlock reads up to schema %d; upgrade windlock", Filename, l.Schema, Schema)
 	default:
-		return fmt.Errorf("%s is schema %d; this windlock reads schema %d to %d; %w", Filename, l.Schema, MinSchema, Schema, ErrReinit)
+		return fmt.Errorf("%s is schema %d; this windlock reads schema %d to %d; rerun windlock init to rewrite it", Filename, l.Schema, MinSchema, Schema)
 	}
 }
 
@@ -163,16 +150,22 @@ func encode(w io.Writer, v any) error {
 // in reading order instead: the version first, then each file's fields as
 // the schema lists them. Map keys (tools, triples, targets) stay sorted.
 func orderFields(root *yaml.Node) {
-	order(root, "schema", "west", "container", "host_tools", "zephyr", "target", "targets", "platforms")
+	order(root, "schema", "west", "container", "sources", "zephyr", "target", "targets", "platforms")
 	if entries := mappingValue(root, "zephyr"); entries != nil {
 		for _, e := range entries.Content {
 			order(e, "name", "url", "revision", "commit", "sdk", "toolchains", "manifest_sha256", "projects", "python_inputs_sha256", "python_requirements")
 		}
 	}
-	for _, p := range mappingValues(mappingValue(root, "platforms")) {
-		for _, a := range mappingValues(mappingValue(p, "host_tools")) {
-			order(a, "url", "sha256")
+	tools := func(m *yaml.Node) {
+		for _, t := range mappingValues(m) {
+			order(t, "version", "url", "sha256")
 		}
+	}
+	tools(mappingValue(root, "sources"))
+	for _, p := range mappingValues(mappingValue(root, "platforms")) {
+		order(p, "build_tools", "flash_tools", "sdk")
+		tools(mappingValue(p, "build_tools"))
+		tools(mappingValue(p, "flash_tools"))
 		for _, b := range mappingValues(mappingValue(p, "sdk")) {
 			order(b, "filename", "url", "sha256")
 		}

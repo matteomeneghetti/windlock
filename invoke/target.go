@@ -54,7 +54,7 @@ func workspaceEnv(lock lockfile.Lockfile, root, triple, appDir, existingPATH str
 		return Command{}, fmt.Errorf("workspace venv: %w; run windlock sync", err)
 	}
 	if err := requireDir(hostBin); err != nil {
-		return Command{}, fmt.Errorf("host tools: %w; run windlock sync", err)
+		return Command{}, fmt.Errorf("build tools: %w; run windlock sync", err)
 	}
 	if !setup.SDKInstalled(sdkDir, entry.SDK) {
 		return Command{}, fmt.Errorf("SDK %s is not installed at %s; run windlock sync", entry.SDK, sdkDir)

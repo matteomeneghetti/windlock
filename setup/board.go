@@ -64,10 +64,6 @@ func InstallBoardToolchain(appDir, targetName string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, err := hostToolsID(lock, triple)
-	if err != nil {
-		return err
-	}
 	ws, err := WorkspaceDir(root, appDir, entry.Commit)
 	if err != nil {
 		return err
@@ -86,7 +82,11 @@ func InstallBoardToolchain(appDir, targetName string, log io.Writer) error {
 				target.Name, tc, lockfile.Filename, entry.Name)
 		}
 	}
-	h := hostEnv{root: root, triple: triple, hostBin: tools.BinDir(root, id), log: log}
+	hostBin, err := HostToolsBin(lock, root, triple)
+	if err != nil {
+		return err
+	}
+	h := hostEnv{root: root, triple: triple, hostBin: hostBin, log: log}
 	if _, sdkDir := h.sdkDirs(entry.SDK); len(missingToolchains(sdkDir, needed)) == 0 && SDKInstalled(sdkDir, entry.SDK) {
 		return nil
 	}

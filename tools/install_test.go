@@ -14,7 +14,7 @@ import (
 
 // cachedNinja puts a ninja zip holding body in root's download cache and
 // returns its pin.
-func cachedNinja(t *testing.T, root, body string) Archive {
+func cachedNinja(t *testing.T, root, body string) Tool {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -29,8 +29,8 @@ func cachedNinja(t *testing.T, root, body string) Archive {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(buf.Bytes())
-	a := Archive{Name: "ninja", Version: "1", URL: "https://example.invalid/ninja.zip", SHA256: hex.EncodeToString(sum[:]), File: "ninja.zip", Kind: kindNinja}
-	path := cachePath(root, a.SHA256, a.File)
+	a := Tool{Name: "ninja", Version: "1", URL: "https://example.invalid/ninja.zip", SHA256: hex.EncodeToString(sum[:])}
+	path := cachePath(root, a.SHA256, fileName(a))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestInstallOneRedoesUnfinishedInstall(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "ninja"), []byte("half"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := installOne(root, hostDir, bin, a, io.Discard); err != nil {
+	if err := installOne(root, hostDir, bin, Set{}, a, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	assertFile(t, filepath.Join(bin, "ninja"), "good")
@@ -64,7 +64,7 @@ func TestInstallOneRedoesUnfinishedInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	if err := installOne(root, hostDir, bin, a, &log); err != nil {
+	if err := installOne(root, hostDir, bin, Set{}, a, &log); err != nil {
 		t.Fatal(err)
 	}
 	assertFile(t, filepath.Join(bin, "ninja"), "kept")
@@ -74,7 +74,7 @@ func TestInstallOneRedoesUnfinishedInstall(t *testing.T) {
 
 	// A marker for another archive is not this one.
 	b := cachedNinja(t, root, "newer")
-	if err := installOne(root, hostDir, bin, b, io.Discard); err != nil {
+	if err := installOne(root, hostDir, bin, Set{}, b, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	assertFile(t, filepath.Join(bin, "ninja"), "newer")

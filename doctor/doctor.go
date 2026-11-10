@@ -9,13 +9,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/matteomeneghetti/windlock/container"
 	"github.com/matteomeneghetti/windlock/flash"
+	"github.com/matteomeneghetti/windlock/host"
 	"github.com/matteomeneghetti/windlock/lockfile"
 	"github.com/matteomeneghetti/windlock/setup"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // Status is how a check went.
@@ -180,6 +183,7 @@ func projectChecks(cfg Config, engine container.Engine, running bool, triple, vo
 	}
 	results := []Result{{OK, "lockfile", lockfile.Filename, ""}}
 	results = append(results, install(cfg, engine, running, triple, volume, haveVolume, lock, entry)...)
+	results = append(results, flashTools(cfg, lock))
 	return append(results, vendorTool(cfg, conf))
 }
 
@@ -221,6 +225,38 @@ func install(cfg Config, engine container.Engine, running bool, triple, volume s
 		results = append(results, Result{Fail, "project", "empty inside the container", container.NotSharedFix(cfg.Project)})
 	}
 	return results
+}
+
+// flashTools checks that the lockfile pins flash tools windlock can install
+// on this host, and once they are installed, names the compiler the ones
+// built from source were built with: it is the one input on the probe side
+// windlock does not pin.
+func flashTools(cfg Config, lock lockfile.Lockfile) Result {
+	triple, err := host.Detect(cfg.GOOS, cfg.GOARCH)
+	if err != nil {
+		return Result{Skip, "flash tools", err.Error(), ""}
+	}
+	set, err := setup.FlashSet(lock, triple)
+	if err == nil {
+		err = tools.Validate(set)
+	}
+	if err != nil {
+		return Result{Fail, "flash tools", err.Error(), "run windlock init"}
+	}
+	built := tools.BuiltWith(cfg.Root, set)
+	if len(built) == 0 {
+		return Result{OK, "flash tools", "locked; installed on the first flash", ""}
+	}
+	names := make([]string, 0, len(built))
+	for name := range built {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var parts []string
+	for _, name := range names {
+		parts = append(parts, name+" built with "+built[name])
+	}
+	return Result{OK, "flash tools", strings.Join(parts, "; "), ""}
 }
 
 func seesProject(inspectOutput string) bool {

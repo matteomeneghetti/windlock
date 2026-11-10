@@ -281,7 +281,7 @@ func writeTemp(root, pattern, content string) (string, error) {
 	return f.Name(), nil
 }
 
-// SyncVenv creates venv with the host tools' Python if it is missing, then
+// SyncVenv creates venv with the flash tools' Python if it is missing, then
 // makes it hold exactly pins, as syncPins does for workspace venvs.
 func SyncVenv(hostBin, root, venv string, pins []string, log io.Writer) error {
 	h := hostEnv{root: root, hostBin: hostBin, log: log}

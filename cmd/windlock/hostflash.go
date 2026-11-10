@@ -13,6 +13,7 @@ import (
 
 	"github.com/matteomeneghetti/windlock/container"
 	"github.com/matteomeneghetti/windlock/flash"
+	"github.com/matteomeneghetti/windlock/host"
 	"github.com/matteomeneghetti/windlock/invoke"
 	"github.com/matteomeneghetti/windlock/lockfile"
 	"github.com/matteomeneghetti/windlock/setup"
@@ -33,7 +34,7 @@ type hostFlash struct {
 
 // The steps that reach outside the process; tests stand in for them.
 var (
-	installFlash = tools.InstallFlash
+	installFlash = tools.Install
 	copyZephyr   = func(project string, entry lockfile.Zephyr, dst string) error {
 		root, err := tools.Root()
 		if err != nil {
@@ -72,6 +73,14 @@ func prepareHostFlash(project string, s streams) (hostFlash, error) {
 	if err != nil {
 		return hostFlash{}, err
 	}
+	triple, err := host.Current()
+	if err != nil {
+		return hostFlash{}, err
+	}
+	set, err := setup.FlashSet(lock, triple)
+	if err != nil {
+		return hostFlash{}, err
+	}
 	release, err := holdRootLock(root, s.errOut)
 	if err != nil {
 		return hostFlash{}, err
@@ -79,7 +88,7 @@ func prepareHostFlash(project string, s streams) (hostFlash, error) {
 	defer release()
 	// Only show the install log when it installed something or failed.
 	var log bytes.Buffer
-	bin, err := installFlash(&log)
+	bin, err := installFlash(set, &log)
 	if err != nil || bytes.Contains(log.Bytes(), []byte(": installing")) || s.verbose {
 		s.errOut.Write(log.Bytes())
 	}

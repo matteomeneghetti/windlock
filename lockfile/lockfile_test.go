@@ -66,7 +66,6 @@ func TestReadFileNamesOtherSchema(t *testing.T) {
 		schema, want string
 	}{
 		{"2", "upgrade windlock"},
-		{"3", "pre-release windlock; rerun windlock init"},
 		{"-1", "rerun windlock init"},
 	} {
 		path := filepath.Join(t.TempDir(), Filename)
@@ -181,7 +180,7 @@ func TestDiff(t *testing.T) {
 	for _, line := range []string{
 		"zephyr[4.4.2].projects[cmsis].revision: want fixture-cmsis, got moved",
 		"zephyr[4.3.1].toolchains[1]: want nothing, got arm-zephyr-eabi",
-		"platforms.macos-aarch64.host_tools.cmake.sha256: want fixture-cmake-mac-sha256, got nothing",
+		"platforms.macos-aarch64.flash_tools.openocd.sha256: want fixture-openocd-mac-sha256, got nothing",
 	} {
 		if !strings.Contains(text, line) {
 			t.Fatalf("diff lacks %q:\n%s", line, text)
@@ -321,7 +320,7 @@ func expectedFixture() Lockfile {
 		Schema:    1,
 		West:      "fixture-west",
 		Container: Container{Image: "fixture-image@sha256:fixture"},
-		HostTools: map[string]string{"cmake": "fixture-cmake", "python": "fixture-python"},
+		Sources:   map[string]Tool{"m4": {Version: "fixture-m4", URL: "fixture-m4-url", SHA256: "fixture-m4-sha256"}},
 		Zephyr: []Zephyr{
 			{
 				Name:           "4.4.2",
@@ -352,15 +351,15 @@ func expectedFixture() Lockfile {
 		},
 		Platforms: map[string]Platform{
 			"linux-x86_64": {
-				HostTools: map[string]Archive{
-					"cmake":  {URL: "fixture-cmake-linux", SHA256: "fixture-cmake-linux-sha256"},
-					"python": {URL: "fixture-python-linux", SHA256: "fixture-python-linux-sha256"},
+				BuildTools: map[string]Tool{
+					"cmake":  {Version: "fixture-cmake", URL: "fixture-cmake-linux", SHA256: "fixture-cmake-linux-sha256"},
+					"python": {Version: "fixture-python", URL: "fixture-python-linux", SHA256: "fixture-python-linux-sha256"},
 				},
 				SDK: map[string]Bundle{"1.0.1": bundle("1.0.1", "linux-x86_64")},
 			},
 			"macos-aarch64": {
-				HostTools: map[string]Archive{
-					"cmake": {URL: "fixture-cmake-mac", SHA256: "fixture-cmake-mac-sha256"},
+				FlashTools: map[string]Tool{
+					"openocd": {Version: "fixture-openocd", URL: "fixture-openocd-mac", SHA256: "fixture-openocd-mac-sha256"},
 				},
 				SDK: map[string]Bundle{"0.17.4": bundle("0.17.4", "macos-aarch64")},
 			},

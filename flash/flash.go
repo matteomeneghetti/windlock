@@ -107,7 +107,7 @@ type Request struct {
 
 // Tools are the host programs the runners use.
 type Tools struct {
-	Bin string // pinned host-tools bin: python, uv, openocd, dfu-util
+	Bin string // the lockfile's flash tools: python, uv, openocd, dfu-util
 	// OpenOCDScripts is the pinned OpenOCD's scripts directory.
 	OpenOCDScripts string
 	// LookPath finds a program on the user's PATH; tests stand in for it.

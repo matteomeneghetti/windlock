@@ -1,46 +1,75 @@
 package tools
 
 import (
-	"reflect"
+	"strings"
 	"testing"
 )
 
-func TestIDStable(t *testing.T) {
-	a := []Version{{Name: "ninja", Version: "1"}, {Name: "cmake", Version: "2"}}
-	b := []Version{{Name: "cmake", Version: "2"}, {Name: "ninja", Version: "1"}}
-	const want = "0bc1d781475855369e2cc4a04ec1fd05327155da0243f4dae35e18f96572eb7b"
-	if got := ID(a); got != want {
-		t.Fatalf("ID = %s, want %s", got, want)
-	}
-	if ID(a) != ID(b) {
-		t.Fatal("id changed with version order")
-	}
-	a[0].Version = "9"
-	if ID(a) == want {
-		t.Fatal("a new ninja version kept the old id")
+func testSet() Set {
+	sha := func(c string) string { return strings.Repeat(c, 64) }
+	return Set{
+		Tools: []Tool{
+			{Name: "ninja", Version: "1", URL: "https://example.invalid/ninja.zip", SHA256: sha("a")},
+			{Name: "dfu-util", Version: "0.11", URL: "https://example.invalid/dfu-util-0.11.tar.gz", SHA256: sha("b")},
+			{Name: "dtc", Version: "1.8.1", URL: "https://example.invalid/dtc-1.8.1.tar.gz", SHA256: sha("c")},
+		},
+		Sources: []Tool{
+			{Name: "libusb", Version: "1", URL: "https://example.invalid/libusb.tar.bz2", SHA256: sha("d")},
+			{Name: "m4", Version: "1", URL: "https://example.invalid/m4.tar.gz", SHA256: sha("e")},
+			{Name: "flex", Version: "1", URL: "https://example.invalid/flex.tar.gz", SHA256: sha("f")},
+			{Name: "bison", Version: "1", URL: "https://example.invalid/bison.tar.gz", SHA256: sha("1")},
+		},
 	}
 }
 
-func TestHostToolsID(t *testing.T) {
-	const linuxID = "743e2fb6413efb3b7ba1ad235a780c9a258ad838c55e7c2ca8e1cbfff0e54bd2"
-	triples := PinnedTriples()
-	if !reflect.DeepEqual(triples, []string{"macos-aarch64", "macos-x86_64", "linux-x86_64", "linux-aarch64"}) {
-		t.Fatalf("pinned triples %v", triples)
+func TestIDFollowsEveryInput(t *testing.T) {
+	base := ID(testSet())
+	reordered := testSet()
+	reordered.Tools[0], reordered.Tools[2] = reordered.Tools[2], reordered.Tools[0]
+	if ID(reordered) != base {
+		t.Fatal("id changed with tool order")
 	}
-	ids := map[string]string{}
-	for _, triple := range triples {
-		id, err := IDFor(triple)
-		if err != nil {
-			t.Fatalf("%s: %v", triple, err)
+	version := testSet()
+	version.Tools[0].Version = "2" // the same bytes: only the sha matters
+	if ID(version) != base {
+		t.Fatal("id changed with a version label")
+	}
+	for name, change := range map[string]func(*Set){
+		"tool sha":          func(s *Set) { s.Tools[0].SHA256 = strings.Repeat("9", 64) },
+		"direct source":     func(s *Set) { s.Sources[0].SHA256 = strings.Repeat("9", 64) },
+		"transitive source": func(s *Set) { s.Sources[1].SHA256 = strings.Repeat("9", 64) },
+	} {
+		s := testSet()
+		change(&s)
+		if ID(s) == base {
+			t.Errorf("%s: id did not change", name)
 		}
-		ids[triple] = id
 	}
-	// Both Linux CPUs pin the same versions, so they share an id; the Mac's
-	// smaller probe-side set has its own.
-	if ids["linux-x86_64"] != linuxID || ids["linux-aarch64"] != linuxID {
-		t.Fatalf("linux ids %v", ids)
+	old := toolRecipes["ninja"]
+	toolRecipes["ninja"] = recipe{kind: old.kind, revision: old.revision + 1}
+	defer func() { toolRecipes["ninja"] = old }()
+	if ID(testSet()) == base {
+		t.Error("recipe revision: id did not change")
 	}
-	if ids["macos-aarch64"] != ids["macos-x86_64"] || ids["macos-aarch64"] == linuxID {
-		t.Fatalf("macos ids %v", ids)
+}
+
+func TestValidate(t *testing.T) {
+	if err := Validate(testSet()); err != nil {
+		t.Fatal(err)
+	}
+	for want, change := range map[string]func(*Set){
+		"no install recipe for tool make": func(s *Set) { s.Tools = append(s.Tools, Tool{Name: "make"}) },
+		"listed twice":                    func(s *Set) { s.Tools = append(s.Tools, s.Tools[0]) },
+		"dtc builds with source":          func(s *Set) { s.Sources = s.Sources[:1] },
+		"no build recipe for source zlib": func(s *Set) { s.Sources = append(s.Sources, Tool{Name: "zlib"}) },
+		"not 64 hex digits":               func(s *Set) { s.Tools[0].SHA256 = "abc" },
+		"https":                           func(s *Set) { s.Tools[0].URL = "http://example.invalid/ninja.zip" },
+		"has no version":                  func(s *Set) { s.Tools[0].Version = "" },
+	} {
+		s := testSet()
+		change(&s)
+		if err := Validate(s); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("want %q, got %v", want, err)
+		}
 	}
 }

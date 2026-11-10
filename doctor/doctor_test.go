@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/matteomeneghetti/windlock/container"
+	"github.com/matteomeneghetti/windlock/host"
 	"github.com/matteomeneghetti/windlock/lockfile"
+	"github.com/matteomeneghetti/windlock/tools"
 )
 
 // The fake engine answers from $INFO_EXIT, $IMAGE_EXIT, $VOLUME_EXIT and $RUN_OUT.
@@ -46,11 +48,21 @@ func writeProject(t *testing.T, cfg Config, image string) {
 	if err := os.WriteFile(filepath.Join(cfg.Project, lockfile.ConfigFilename), []byte(conf), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lock := "schema: 1\nwest: 1.5.0\ncontainer:\n  image: " + image + "\nzephyr:\n  - name: \"4.4.1\"\n    commit: abc\n    sdk: 1.0.1\n"
+	triple, err := host.Detect(cfg.GOOS, cfg.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := "schema: 1\nwest: 1.5.0\ncontainer:\n  image: " + image + "\nzephyr:\n  - name: \"4.4.1\"\n    commit: abc\n    sdk: 1.0.1\n" +
+		"platforms:\n  " + triple + ":\n    flash_tools:\n      openocd: {version: 0.12.0-7, url: " + testOpenOCDURL + ", sha256: " + testOpenOCDSHA + "}\n"
 	if err := os.WriteFile(filepath.Join(cfg.Project, lockfile.Filename), []byte(lock), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
+
+const (
+	testOpenOCDURL = "https://example.invalid/openocd.tar.gz"
+	testOpenOCDSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+)
 
 func find(t *testing.T, results []Result, name string) Result {
 	t.Helper()
@@ -70,7 +82,7 @@ func TestHealthyProject(t *testing.T) {
 	if Failed(results) {
 		t.Fatalf("%+v", results)
 	}
-	for name, want := range map[string]Status{"engine": OK, "running": OK, "vm size": OK, "disk": Skip, "compiler": OK, "lockfile": OK, "image": OK, "install": OK, "project": OK, "flash": Skip} {
+	for name, want := range map[string]Status{"engine": OK, "running": OK, "vm size": OK, "disk": Skip, "compiler": OK, "lockfile": OK, "image": OK, "install": OK, "project": OK, "flash": Skip, "flash tools": OK} {
 		if got := find(t, results, name).Status; got != want {
 			t.Fatalf("%s: %s, want %s: %+v", name, got, want, results)
 		}
@@ -213,5 +225,34 @@ func TestVendorRunner(t *testing.T) {
 	cfg.LookPath = func(string) (string, error) { return "", errors.New("not found") }
 	if r := find(t, Run(cfg), "flash"); r.Status != Warn || !strings.Contains(r.Fix, "segger") {
 		t.Fatalf("missing: %+v", r)
+	}
+}
+
+func TestFlashToolsCheck(t *testing.T) {
+	cfg := testConfig(t)
+	writeProject(t, cfg, "img@sha256:1")
+	if r := find(t, Run(cfg), "flash tools"); r.Status != OK || !strings.Contains(r.Detail, "installed on the first flash") {
+		t.Fatalf("before install %+v", r)
+	}
+	// After a flash install, doctor names the compiler dfu-util was built with.
+	triple, _ := host.Detect(cfg.GOOS, cfg.GOARCH)
+	set := tools.Set{Tools: []tools.Tool{{Name: "openocd", Version: "0.12.0-7", URL: testOpenOCDURL, SHA256: testOpenOCDSHA}}}
+	dir := filepath.Join(cfg.Root, "host", tools.ID(set), ".installed")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "openocd.cc"), []byte("Apple clang version 17.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := find(t, Run(cfg), "flash tools"); r.Status != OK || r.Detail != "openocd built with Apple clang version 17.0.0" {
+		t.Fatalf("after install %+v (%s)", r, triple)
+	}
+	// A lockfile without this host's flash tools fails.
+	lock := "schema: 1\nwest: 1.5.0\ncontainer:\n  image: img@sha256:1\nzephyr:\n  - name: \"4.4.1\"\n    commit: abc\n    sdk: 1.0.1\n"
+	if err := os.WriteFile(filepath.Join(cfg.Project, lockfile.Filename), []byte(lock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := find(t, Run(cfg), "flash tools"); r.Status != Fail || r.Fix != "run windlock init" {
+		t.Fatalf("no flash tools %+v", r)
 	}
 }

@@ -63,7 +63,7 @@ func testEntries() []lockfile.Zephyr {
 
 func mustLock(t *testing.T, current string) lockfile.Lockfile {
 	t.Helper()
-	lock, err := assembleLock(testEntries(), "1.5.0", testSums, current)
+	lock, err := assembleLock(testEntries(), "1.5.0", testSums, mustPins(), current)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,28 +110,41 @@ func TestAssembleLockIsIdenticalOnEveryHost(t *testing.T) {
 	}
 }
 
+func mustPins() pinSection {
+	ps, err := defaultPins()
+	if err != nil {
+		panic(err)
+	}
+	return ps
+}
+
 func TestAssembleLockPlatforms(t *testing.T) {
 	lock := mustLock(t, "linux-x86_64")
 	if lock.Schema != lockfile.Schema || lock.West != "1.5.0" {
 		t.Fatalf("schema %d west %s", lock.Schema, lock.West)
 	}
-	want := map[string]string{"cmake": "3.31.12", "ninja": "1.13.2", "python": "3.12.15", "dtc": "1.8.1", "gperf": "3.3", "uv": "0.13.6", "openocd": "0.12.0-7", "dfu-util": "0.11"}
-	if !reflect.DeepEqual(lock.HostTools, want) {
-		t.Fatalf("host tools %v", lock.HostTools)
+	if got := sortedKeys(lock.Sources); !reflect.DeepEqual(got, []string{"bison", "flex", "libusb", "m4"}) {
+		t.Fatalf("sources %v", got)
 	}
 	if got := sortedKeys(lock.Platforms); !reflect.DeepEqual(got, []string{"linux-aarch64", "linux-x86_64", "macos-aarch64", "macos-x86_64"}) {
 		t.Fatalf("platforms %v", got)
 	}
-	// The Mac records only its probe side, at the same versions.
+	flash := []string{"dfu-util", "openocd", "python", "uv"}
+	// The Mac records only its probe side.
 	for _, triple := range []string{"macos-aarch64", "macos-x86_64"} {
 		mac := lock.Platforms[triple]
-		if len(mac.SDK) != 0 || !reflect.DeepEqual(sortedKeys(mac.HostTools), []string{"dfu-util", "openocd", "python", "uv"}) {
+		if len(mac.SDK) != 0 || len(mac.BuildTools) != 0 || !reflect.DeepEqual(sortedKeys(mac.FlashTools), flash) {
 			t.Fatalf("%s %+v", triple, mac)
 		}
 	}
 	for _, triple := range []string{"linux-x86_64", "linux-aarch64"} {
-		if p := lock.Platforms[triple]; len(p.HostTools) != 8 || len(p.SDK) != 2 {
+		p := lock.Platforms[triple]
+		if !reflect.DeepEqual(sortedKeys(p.BuildTools), []string{"cmake", "dtc", "gperf", "ninja", "python", "uv"}) ||
+			!reflect.DeepEqual(sortedKeys(p.FlashTools), flash) || len(p.SDK) != 2 {
 			t.Fatalf("%s %+v", triple, p)
+		}
+		if p.BuildTools["cmake"].Version != "3.31.12" {
+			t.Fatalf("%s cmake %+v", triple, p.BuildTools["cmake"])
 		}
 	}
 	if b := lock.Platforms["linux-aarch64"].SDK["1.0.1"]; b.Filename != "zephyr-sdk-1.0.1_linux-aarch64_minimal.tar.xz" {
@@ -139,19 +152,109 @@ func TestAssembleLockPlatforms(t *testing.T) {
 	}
 }
 
+// otherNinja is a real Ninja release the defaults don't pin.
+var otherNinja = lockfile.Tool{
+	Version: "1.13.1",
+	URL:     "https://github.com/ninja-build/ninja/releases/download/v1.13.1/ninja-linux.zip",
+	SHA256:  strings.Repeat("ab", 32),
+}
+
+func TestLockedPinsSurviveRewrites(t *testing.T) {
+	lock := mustLock(t, "linux-x86_64")
+	lock.Platforms["linux-x86_64"].BuildTools["ninja"] = otherNinja
+	// A command other than init rewrites the lockfile with its pins.
+	again, err := assembleLock(lock.Zephyr, lock.West, testSums, lockedPins(lock), "linux-x86_64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Platforms["linux-x86_64"].BuildTools["ninja"]; got != otherNinja {
+		t.Fatalf("ninja %+v", got)
+	}
+	if d, _ := lockfile.Diff(lock, again); d != nil {
+		t.Fatalf("rewrite changed %v", d)
+	}
+	// init locks this windlock's pins instead.
+	reset, err := assembleLock(lock.Zephyr, lock.West, testSums, mustPins(), "linux-x86_64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reset.Platforms["linux-x86_64"].BuildTools["ninja"]; got.Version != "1.13.2" {
+		t.Fatalf("init ninja %+v", got)
+	}
+}
+
+func TestBuildAndFlashSets(t *testing.T) {
+	lock := mustLock(t, "linux-x86_64")
+	build, err := BuildSet(lock, "linux-x86_64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, tool := range build.Tools {
+		names = append(names, tool.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"cmake", "dtc", "gperf", "ninja", "python", "uv"}) || len(build.Sources) != 4 {
+		t.Fatalf("build set %v sources %d", names, len(build.Sources))
+	}
+	if err := tools.Validate(build); err != nil {
+		t.Fatal(err)
+	}
+	if set, err := FlashSet(lock, "macos-aarch64"); err != nil || len(set.Tools) != 4 {
+		t.Fatalf("mac flash set %+v err %v", set, err)
+	}
+	if _, err := BuildSet(lock, "macos-aarch64"); err == nil || !strings.Contains(err.Error(), "no build tools for macos-aarch64") {
+		t.Fatalf("mac build set err %v", err)
+	}
+	if _, err := FlashSet(lock, "solaris-sparc"); err == nil {
+		t.Fatal("unknown platform has a flash set")
+	}
+
+	// The build dir follows the lockfile's pins, not this windlock's.
+	root := t.TempDir()
+	bin, err := HostToolsBin(lock, root, "linux-x86_64")
+	if err != nil || bin != tools.BinDirFor(root, build) {
+		t.Fatalf("bin %s err %v", bin, err)
+	}
+	lock.Platforms["linux-x86_64"].BuildTools["ninja"] = otherNinja
+	if other, _ := HostToolsBin(lock, root, "linux-x86_64"); other == bin {
+		t.Fatal("another ninja kept the same host-tools dir")
+	}
+}
+
+func TestAssembleLockRejectsUninstallableTools(t *testing.T) {
+	pins := mustPins()
+	pins.build["linux-x86_64"] = map[string]lockfile.Tool{"make": otherNinja}
+	if _, err := assembleLock(testEntries(), "1.5.0", testSums, pins, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "no install recipe for tool make") {
+		t.Fatalf("unknown tool err %v", err)
+	}
+	pins = mustPins()
+	delete(pins.sources, "libusb")
+	if _, err := assembleLock(testEntries(), "1.5.0", testSums, pins, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "dfu-util builds with source libusb") {
+		t.Fatalf("missing source err %v", err)
+	}
+}
+
 func TestAssembleLockRejectsUnusableHost(t *testing.T) {
 	// Only the container writes lockfiles; a Mac has no SDK bundle to build with.
-	_, err := assembleLock(testEntries(), "1.5.0", testSums, "macos-aarch64")
-	if err == nil || !strings.Contains(err.Error(), "SDK 1.0.1 bundle for host macos-aarch64") ||
-		!strings.Contains(err.Error(), "linux-aarch64, linux-x86_64") {
+	_, err := assembleLock(testEntries(), "1.5.0", testSums, mustPins(), "macos-aarch64")
+	if err == nil || !strings.Contains(err.Error(), "no build tools for macos-aarch64") {
+		t.Fatalf("mac err %v", err)
+	}
+	// A Linux host with build tools but no bundle names the hosts that have one.
+	lock := mustLock(t, "linux-x86_64")
+	p := lock.Platforms["linux-x86_64"]
+	p.SDK = nil
+	lock.Platforms["linux-x86_64"] = p
+	if err := usablePlatform(lock, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "SDK 1.0.1 bundle for host linux-x86_64") ||
+		!strings.Contains(err.Error(), "(recorded hosts: linux-aarch64)") {
 		t.Fatalf("missing bundle err %v", err)
 	}
-	if _, err := assembleLock(testEntries(), "1.5.0", testSums, "linux-aarch64"); err != nil {
+	if _, err := assembleLock(testEntries(), "1.5.0", testSums, mustPins(), "linux-aarch64"); err != nil {
 		t.Fatalf("linux-aarch64: %v", err)
 	}
 	bare := lockfile.Lockfile{Platforms: map[string]lockfile.Platform{"linux-aarch64": {}}}
-	if err := usablePlatform(bare, "linux-aarch64"); err == nil || !strings.Contains(err.Error(), "no host tools for linux-aarch64") {
-		t.Fatalf("no host-tool pins err %v", err)
+	if err := usablePlatform(bare, "linux-aarch64"); err == nil || !strings.Contains(err.Error(), "no build tools for linux-aarch64") {
+		t.Fatalf("no build tools err %v", err)
 	}
 }
 
@@ -166,70 +269,19 @@ func TestAssembleLockRejectsBadEntries(t *testing.T) {
 	for want, edit := range cases {
 		entries := testEntries()
 		edit(&entries[0])
-		if _, err := assembleLock(entries, "1.5.0", testSums, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), want) {
+		if _, err := assembleLock(entries, "1.5.0", testSums, mustPins(), "linux-x86_64"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("%s: err %v", want, err)
 		}
 	}
 	twice := append(testEntries(), testEntries()[0])
-	if _, err := assembleLock(twice, "1.5.0", testSums, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "twice") {
+	if _, err := assembleLock(twice, "1.5.0", testSums, mustPins(), "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "twice") {
 		t.Fatalf("duplicate err %v", err)
 	}
-	if _, err := assembleLock(testEntries(), "", testSums, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "west") {
+	if _, err := assembleLock(testEntries(), "", testSums, mustPins(), "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "west") {
 		t.Fatalf("west err %v", err)
 	}
-	if _, err := assembleLock(testEntries(), "1.5.0", map[string]string{"1.0.1": sdk101Sum}, "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "0.17.4") {
+	if _, err := assembleLock(testEntries(), "1.5.0", map[string]string{"1.0.1": sdk101Sum}, mustPins(), "linux-x86_64"); err == nil || !strings.Contains(err.Error(), "0.17.4") {
 		t.Fatalf("missing sum err %v", err)
-	}
-}
-
-func TestCheckHostTools(t *testing.T) {
-	lock := mustLock(t, "linux-x86_64")
-	for _, triple := range tools.PinnedTriples() {
-		pins, err := tools.HostPins(triple)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := checkHostTools(lock, triple, pins); err != nil {
-			t.Fatalf("lockfile written on linux, sync on %s: %v", triple, err)
-		}
-	}
-	linux, err := tools.HostPins("linux-x86_64")
-	if err != nil {
-		t.Fatal(err)
-	}
-	bad := mustLock(t, "linux-x86_64")
-	a := bad.Platforms["linux-x86_64"].HostTools["cmake"]
-	a.SHA256 = strings.Repeat("00", 32)
-	bad.Platforms["linux-x86_64"].HostTools["cmake"] = a
-	if err := checkHostTools(bad, "linux-x86_64", linux); err == nil || !strings.Contains(err.Error(), "cmake") {
-		t.Fatalf("cmake sha mismatch err %v", err)
-	}
-	old := mustLock(t, "linux-x86_64")
-	old.HostTools["python"] = "3.12.14"
-	if err := checkHostTools(old, "linux-x86_64", linux); err == nil || !strings.Contains(err.Error(), "python 3.12.14") {
-		t.Fatalf("version mismatch err %v", err)
-	}
-	missing := mustLock(t, "linux-x86_64")
-	delete(missing.Platforms["linux-x86_64"].HostTools, "gperf")
-	if err := checkHostTools(missing, "linux-x86_64", linux); err == nil || !strings.Contains(err.Error(), "host tools for linux-x86_64") {
-		t.Fatalf("missing tool err %v", err)
-	}
-}
-
-func TestHostToolsIDMatchesInstall(t *testing.T) {
-	lock := mustLock(t, "linux-x86_64")
-	for _, triple := range tools.PinnedTriples() {
-		got, err := hostToolsID(lock, triple)
-		if err != nil {
-			t.Fatal(err)
-		}
-		want, err := tools.IDFor(triple)
-		if err != nil || got != want {
-			t.Fatalf("%s id %s, install uses %s (err %v)", triple, got, want, err)
-		}
-	}
-	if _, err := hostToolsID(lock, "solaris-sparc"); err == nil {
-		t.Fatal("unknown platform has an id")
 	}
 }
 
